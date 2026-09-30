@@ -28,7 +28,7 @@ SCHEMA = {
     ],
     "Arbitraggio": [
         "ID", "Data partita", "Numero pacco", "Squadra casa", "Squadra ospite",
-        "Compenso", "Note", "Conto", "Movimento_ID", "Categoria", "Stato", "Data incasso",
+        "Compenso", "Note", "Conto", "Movimento_ID", "Categoria", "Stato", "Data incasso", "Km", "Categoria partita",
     ],
     "Categorie": ["ID", "Nome", "Tipo"],
     "Conti": ["ID", "Nome", "Saldo_iniziale"],
@@ -163,6 +163,8 @@ class ExcelStore:
                     cell.number_format = "dd/mm/yyyy"
                 elif header == "Data_creazione":
                     cell.number_format = "dd/mm/yyyy hh:mm:ss"
+                elif header == "Km":
+                    cell.number_format = "0.0"
 
     def _write_rows(self, workbook, tables):
         for name, records in tables.items():

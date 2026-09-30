@@ -42,12 +42,14 @@ def render(service, snapshot):
             display["Partita"] = display["Squadra casa"] + " – " + display["Squadra ospite"]
             display["Data incasso"] = display["Data incasso"].dt.date
             display["Data partita"] = display["Data partita"].dt.date
-            display = display.set_index("ID")[["Data partita", "Partita", "Numero pacco", "Compenso", "Stato", "Data incasso", "Conto", "Note"]].rename(columns={"Data partita": "Data", "Numero pacco": "N° pacco"})
+            display = display.set_index("ID")[["Data partita", "Partita", "Numero pacco", "Categoria partita", "Km", "Compenso", "Stato", "Data incasso", "Conto", "Note"]].rename(columns={"Data partita": "Data", "Numero pacco": "N° pacco"})
             records = {row["ID"]: row for row in snapshot.tables["Arbitraggio"]}
             revision = hashlib.sha256(repr(snapshot.tables["Arbitraggio"]).encode()).hexdigest()[:16]
             st.caption("Modifica Stato, Data incasso e Conto nella tabella, poi premi Salva pagamenti. Ricevuto richiede data e conto. Da ricevere rimuove l'eventuale entrata collegata.")
-            edited = st.data_editor(display, hide_index=True, width="stretch", num_rows="fixed", disabled=["Data", "Partita", "N° pacco", "Compenso", "Note"], key=f"referee_payments_{revision}", column_config={
+            edited = st.data_editor(display, hide_index=True, width="stretch", num_rows="fixed", disabled=["Data", "Partita", "N° pacco", "Categoria partita", "Km", "Compenso", "Note"], key=f"referee_payments_{revision}", column_config={
                 "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                "Km": st.column_config.NumberColumn("Km", format="%.1f"),
+                "Categoria partita": st.column_config.TextColumn("Categoria partita"),
                 "Compenso": st.column_config.NumberColumn("Compenso", format="%.2f €"),
                 "Stato": st.column_config.SelectboxColumn("Stato", options=["Da ricevere", "Ricevuto"], required=True),
                 "Data incasso": st.column_config.DateColumn("Data incasso", format="DD/MM/YYYY", max_value=today()),

@@ -127,6 +127,8 @@ def test_ui_defaults_pending_and_table_receipt(service, monkeypatch):
     widget(at.text_input,"Squadra di casa").set_value("A")
     widget(at.text_input,"Squadra ospite").set_value("B")
     widget(at.number_input,"Compenso previsto (€)").set_value(50)
+    widget(at.number_input,"Km percorsi").set_value(32.5)
+    widget(at.text_input,"Categoria della partita").set_value("Juniores")
     widget(at.button,"Salva partita").click().run()
     assert not at.exception and service.snapshot().movements.empty
     # Simulate the table's editable-cell event, then submit the actual save action.
@@ -136,4 +138,44 @@ def test_ui_defaults_pending_and_table_receipt(service, monkeypatch):
     at.button(key="save_payments").click().run()
     assert not at.exception
     assert total_balance(service.snapshot())==50
-    assert service.snapshot().tables["Arbitraggio"][0]["Stato"]=="Ricevuto"
+    record = service.snapshot().tables["Arbitraggio"][0]
+    assert record["Stato"]=="Ricevuto"
+    assert record["Km"]==32.5 and record["Categoria partita"]=="Juniores"
+    assert record["Categoria"]=="Arbitraggio"
+
+
+
+def test_match_details_edit_and_excel_migration_preserve_receipt(service):
+    mid = add(service, km=32.5, match_category="Allievi", status="Ricevuto", received_date=today(), account="Contanti")
+    original = service.snapshot().tables["Arbitraggio"][0]
+    entry_id = original["Movimento_ID"]
+    add(service, match_id=mid, km=40, match_category="Juniores", status="Ricevuto", received_date=today(), account="Contanti")
+    record = service.snapshot().tables["Arbitraggio"][0]
+    assert record["Km"] == 40 and record["Categoria partita"] == "Juniores"
+    assert record["Categoria"] == "Arbitraggio" and record["Movimento_ID"] == entry_id
+    assert total_balance(service.snapshot()) == 45 and len(service.snapshot().movements) == 1
+    # Omitted metadata stays intact when a caller edits other match fields.
+    add(service, match_id=mid, status="Ricevuto", received_date=today(), account="Contanti")
+    record = service.snapshot().tables["Arbitraggio"][0]
+    assert record["Km"] == 40 and record["Categoria partita"] == "Juniores"
+    workbook = load_workbook(service.store.path)
+    sheet = workbook["Arbitraggio"]
+    headers = [c.value for c in sheet[1]]
+    assert sheet.cell(2, headers.index("Km")+1).data_type == "n"
+    for name in ["Categoria partita", "Km"]:
+        headers = [c.value for c in sheet[1]]
+        sheet.delete_cols(headers.index(name)+1)
+    workbook.save(service.store.path)
+    workbook.close()
+    migrated = service.snapshot()
+    assert migrated.tables["Arbitraggio"][0]["Km"] == 0
+    assert migrated.tables["Arbitraggio"][0]["Categoria partita"] == ""
+    assert total_balance(migrated) == 45
+    assert migrated.tables["Movimenti"][0]["ID"] == entry_id
+
+
+def test_negative_km_is_rejected_atomically(service):
+    before = service.store.path.read_bytes()
+    with pytest.raises(ValidationError):
+        add(service, km=-1)
+    assert service.store.path.read_bytes() == before

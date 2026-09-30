@@ -292,6 +292,9 @@ def match_dialog(service, *, token, match=None):
         col1, col2 = st.columns(2)
         home = col1.text_input("Squadra di casa", value=original.get("Squadra casa", ""), max_chars=120, key=f"{token}_home")
         away = col2.text_input("Squadra ospite", value=original.get("Squadra ospite", ""), max_chars=120, key=f"{token}_away")
+        col1, col2 = st.columns(2)
+        km = col1.number_input("Km percorsi", min_value=0.0, max_value=999999.0, value=float(original.get("Km", 0.0)), step=1.0, format="%.1f", key=f"{token}_km")
+        match_category = col2.text_input("Categoria della partita", value=original.get("Categoria partita", ""), max_chars=120, placeholder="Es. Allievi, Juniores, Promozione", key=f"{token}_match_category")
         fee = st.number_input("Compenso previsto (€)", min_value=0.0, max_value=999999999999.99, value=float(original.get("Compenso", 0.0)), step=.01, format="%.2f", key=f"{token}_fee")
         received_date, account = None, ""
         if status == "Ricevuto":
@@ -306,7 +309,7 @@ def match_dialog(service, *, token, match=None):
         submitted = st.form_submit_button("Salva modifiche" if match else "Salva partita", type="primary", width="stretch")
         if submitted:
             try:
-                service.save_match(date=date_value, package=package, home=home, away=away, fee=fee, account=account, category=category, notes=notes, match_id=original.get("ID"), expected=match, status=status, received_date=received_date)
+                service.save_match(date=date_value, package=package, home=home, away=away, fee=fee, account=account, category=category, notes=notes, match_id=original.get("ID"), expected=match, status=status, received_date=received_date, km=km, match_category=match_category)
             except FinanceError as exc:
                 st.error(str(exc))
             else:

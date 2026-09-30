@@ -72,7 +72,12 @@ Al termine apri l'indirizzo `https://....streamlit.app` assegnato alla tua app.
    Esempio: 500 € iniziali + 100 € di entrate − 20 € di uscite = 580 €.
    Non registrare una seconda entrata per il saldo iniziale.
 3. Usa **+ Nuovo movimento** per entrate e uscite.
-4. Per le partite usa **Arbitraggio → + Nuova partita**: lo stato iniziale è **Da ricevere**,
+4. Per le partite usa **Arbitraggio → + Nuova partita**: puoi inserire **Km percorsi** e
+   **Categoria della partita** (testo libero, distinta dalla categoria finanziaria).
+   I due campi sono modificabili anche dopo il pagamento e visibili nello storico.
+   Per le partite già registrate, Km parte da 0 e Categoria partita resta vuota.
+   Le colonne vengono aggiunte automaticamente all’Excel.
+   Per i pagamenti, lo stato iniziale è **Da ricevere**,
    quindi il compenso non aumenta il saldo. Nello storico modifica **Stato**, **Data incasso**
    e **Conto**, poi premi **Salva pagamenti**. Lo stato **Ricevuto** genera una sola entrata
    alla data dell’incasso. Modificare o eliminare una partita aggiorna l’eventuale entrata.

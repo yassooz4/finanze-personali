@@ -125,6 +125,8 @@ class FinanceService:
                     elif sheet == "Arbitraggio":
                         row["Data partita"] = as_date(row.get("Data partita"), past_only=True)
                         row["Compenso"] = money(row.get("Compenso"), nonnegative=True)
+                        row["Km"] = money(row.get("Km") or 0, nonnegative=True)
+                        row["Categoria partita"] = text(row.get("Categoria partita"), label="Categoria partita", limit=120)
                         for field in ("Numero pacco", "Squadra casa", "Squadra ospite", "Note", "Conto", "Movimento_ID", "Categoria"):
                             row[field] = text(row.get(field), label=field, limit=5000 if field == "Note" else 2000)
                         for field in ("Numero pacco", "Squadra casa", "Squadra ospite"):
@@ -264,7 +266,7 @@ class FinanceService:
             "Fonte": "Arbitraggio", "Note": row["Note"], "Conto": account,
         })
 
-    def save_match(self, *, date, package, home, away, fee, account="", category="", notes="", match_id=None, expected=None, status="Da ricevere", received_date=None):
+    def save_match(self, *, date, package, home, away, fee, account="", category="", notes="", match_id=None, expected=None, status="Da ricevere", received_date=None, km=None, match_category=None):
         def operation(tables):
             category_name = text(category)
             self._validate_category(tables, category_name, "Entrata")
@@ -279,6 +281,8 @@ class FinanceService:
                 "Squadra ospite": text(away, label="La squadra ospite", required=True, limit=120),
                 "Compenso": money(fee, nonnegative=True), "Note": text(notes, limit=5000),
                 "Categoria": category_name,
+                "Km": money(km if km is not None else (row or {}).get("Km", 0), nonnegative=True),
+                "Categoria partita": text(match_category if match_category is not None else (row or {}).get("Categoria partita", ""), label="Categoria partita", limit=120),
             }
             if row is None:
                 row = {"ID": new_id("P"), "Movimento_ID": "", **values}
