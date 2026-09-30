@@ -6,6 +6,7 @@ from .. import ui
 from ..errors import FinanceError
 from ..service import CATEGORY_KINDS
 from ..utils import euro
+from ..export import excel_export
 
 
 def _run(operation, message):
@@ -108,14 +109,14 @@ def _categories(service, snapshot):
 
 
 def _archive(service, snapshot):
-    st.subheader("Il tuo archivio Excel")
-    if getattr(service.store, "is_remote", False):
-        st.write("Il tuo database è **finanze.xlsx**, salvato su GitHub. Puoi scaricarlo e aprirlo normalmente con Excel.")
-        st.caption("Ogni salvataggio aggiorna l'Excel sul ramo dati. Le versioni precedenti restano nella cronologia GitHub.")
+    st.subheader("Il tuo archivio")
+    if getattr(service.store, "backend", "") == "google_sheets":
+        st.write("Tutti i dati sono salvati nel tuo **Google Sheets**. Rimangono nel foglio anche quando Streamlit si riavvia.")
+        st.link_button("Apri il foglio Google", service.store.url, width="stretch")
+        st.caption("Il download Excel è una copia dei dati attuali. Il database dell'app resta Google Sheets.")
     else:
-        st.write("Tutti i dati sono in **finanze.xlsx**, nella cartella dell'app. Puoi aprirlo normalmente con Excel.")
-        st.caption("Chiudi Excel prima di salvare dall'app. La copia finanze.backup.xlsx conserva lo stato precedente all'ultimo salvataggio.")
-    st.download_button("Scarica finanze.xlsx", data=service.store.download(), file_name="finanze.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
+        st.caption("Modalità di test locale con Excel.")
+    st.download_button("Scarica finanze.xlsx", data=excel_export(snapshot.tables), file_name="finanze.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
     st.markdown("**Fogli presenti**")
     display = pd.DataFrame([
         {"Foglio": "Movimenti", "Righe": len(snapshot.tables["Movimenti"]), "Contenuto": "Entrate e uscite, incluse quelle delle partite"},
@@ -128,7 +129,7 @@ def _archive(service, snapshot):
 
 def render(service, snapshot):
     ui.page_header("Gestione", "Personalizza i conti e le categorie come preferisci.", service, action=False)
-    accounts, categories, archive = st.tabs(["Conti", "Categorie", "Archivio Excel"])
+    accounts, categories, archive = st.tabs(["Conti", "Categorie", "Archivio"])
     with accounts:
         _accounts(service, snapshot)
     with categories:

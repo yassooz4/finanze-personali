@@ -1,166 +1,44 @@
-# Finanze — Streamlit Cloud + GitHub
+# Finanze personali · Google Sheets
 
-App personale per movimenti, conti, categorie e arbitraggio. **finanze.xlsx è l'unico database.**
-L'app si usa online da un indirizzo `https://....streamlit.app`, anche dal telefono.
-Non devi avviare localhost o tenere acceso il computer.
+App personale Python + Streamlit + Pandas. **Google Sheets è l'unico archivio online**: nessun database SQL, nessun salvataggio finanziario su disco Streamlit o GitHub. Il download Excel è solo una copia esportabile.
 
-## 1. Carica il progetto su GitHub
+## Attivazione su Streamlit Cloud
 
-Crea un repository **privato**, ad esempio `finanze-personali`.
-Estrai lo ZIP e carica **il contenuto** della cartella `finanze` nella radice del repository, non lo ZIP.
-`app.py`, `requirements.txt` e `finanze.xlsx` devono essere nella radice.
-Carica anche `finanze_app`, `tests`, `.gitignore` e `.streamlit/config.toml`.
-Il ramo del codice sarà normalmente **main**.
+1. Crea un foglio vuoto su https://sheets.new e chiamalo **Finanze**. L'app crea automaticamente le schede Movimenti, Arbitraggio, Categorie e Conti.
+2. Su https://console.cloud.google.com crea o scegli un progetto. In **API e servizi > Libreria**, abilita **Google Sheets API**.
+3. In **IAM e amministrazione > Account di servizio**, crea un account di servizio. Non serve assegnargli ruoli di amministrazione del progetto.
+4. Apri l'account di servizio > **Chiavi > Aggiungi chiave > Crea nuova chiave > JSON**. Conserva il file privatamente.
+5. Apri il foglio Google > **Condividi**. Aggiungi il `client_email` del JSON con ruolo **Editor**. Non rendere pubblico il foglio.
+6. In Streamlit Cloud > app > **Settings > Secrets**, conserva `[accesso]` con la tua password e aggiungi `[sheets]` e `[gcp_service_account]` seguendo `secrets.example.toml`. Copia i valori del JSON nella sezione corrispondente. La `private_key` va su una stringa TOML con i caratteri `\n`, come nel modello. Non caricare il JSON o i Secrets su GitHub e non incollare le chiavi in chat.
+7. In `[sheets]`, inserisci l'ID contenuto nel link: `https://docs.google.com/spreadsheets/d/QUESTO_E_L_ID/edit`. Salva i Secrets e riavvia l'app se necessario. Il ramo dell'app è **main**, file **app.py**. Puoi rimuovere la precedente sezione `[github]`: non viene più usata.
+8. Registra una partita, apri il foglio per verificare la riga, riavvia l'app e verifica che la partita sia ancora presente.
 
-## 2. Crea il ramo dati
+Le vecchie partite non vengono importate automaticamente. Il precedente ramo `dati` resta intatto come archivio storico, ma l'app non lo usa più.
 
-Nel repository, apri il selettore del ramo `main`, scrivi `dati` e crea questo nuovo ramo da `main`.
-Controlla che nel ramo **dati** sia presente `finanze.xlsx`.
+## Funzioni
 
-- **main:** codice eseguito da Streamlit.
-- **dati:** Excel aggiornato automaticamente dall'app.
+- Dashboard, movimenti con aggiunta/modifica/eliminazione, statistiche, conti e categorie personalizzabili.
+- Arbitraggio: data, numero pacco, squadre, compenso previsto, km, categoria della partita e note.
+- Una partita nuova è **Da ricevere** e non aumenta il saldo. Se diventa **Ricevuto**, data incasso e conto sono richiesti e viene creata una sola entrata collegata. Le correzioni aggiornano la stessa entrata; il ritorno a Da ricevere la rimuove.
+- Storico con stato, filtri, importi ricevuti e ancora da ricevere. Menu dei pagamenti nello storico.
+- Login protetto dalla password nei Secrets e pulsante Esci.
+- Gestione > Archivio: link al foglio e download di finanze.xlsx.
 
-Questa separazione evita che ogni movimento faccia ripartire l'app.
-Dopo il primo salvataggio, l'Excel autorevole è quello sul ramo **dati**.
-L'Excel iniziale su main non viene aggiornato e non va usato per controllare i saldi successivi.
+## Come vengono salvati i dati
 
-## 3. Crea il token GitHub
+Ogni lettura acquisisce i dati dal foglio e li elabora in Pandas. Viene memorizzata solo la connessione Google, mai una copia dei dati finanziari. I salvataggi aggiornano le schede interessate in un'unica richiesta Google atomica: partita e movimento vengono scritti insieme. Le cancellazioni rimuovono anche le righe residue; gli ID non cambiano nelle modifiche.
 
-In GitHub: **Settings → Developer settings → Personal access tokens → Fine-grained tokens → Generate new token**.
+Le sessioni nella stessa istanza sono serializzate e prima del salvataggio viene verificato che il foglio non sia cambiato. Google Sheets non offre un blocco tra tutte le applicazioni: evita di modificare il foglio manualmente nello stesso istante di un salvataggio dall'app. Sono preservate schede aggiuntive e colonne personalizzate. Non rinominare le schede o le intestazioni dell'app e non cambiare gli ID; usa valori semplici nelle colonne finanziarie.
 
-- Scegli il tuo account come proprietario delle risorse.
-- In **Repository access**, seleziona solo `finanze-personali`.
-- In **Repository permissions → Contents**, imposta **Read and write**.
-- Genera il token e copialo. Scegli una scadenza e rinnova il token nei Secrets prima che scada.
+Se mancano credenziali o Google non risponde, l'app mostra un errore: non crea un archivio locale alternativo. Dopo un timeout verifica lo storico prima di reinserire una riga. Usa anche la cronologia versioni di Google Sheets per recuperare modifiche accidentali.
 
-Il token va solo nei Secrets di Streamlit: non pubblicarlo nel codice o in un file GitHub.
-`secrets.example.toml` contiene esclusivamente segnaposto.
+## Codice e test
 
-## 4. Pubblica su Streamlit
-
-Apri https://share.streamlit.io e collega GitHub, autorizzando l'accesso al repository privato.
-Seleziona **Create app** e indica:
-
-| Campo | Valore |
-| --- | --- |
-| Repository | `TUO_USERNAME/finanze-personali` |
-| Branch del codice | `main` |
-| Main file path | `app.py` |
-| Python, nelle impostazioni avanzate | `3.12` |
-
-In **Advanced settings → Secrets**, incolla e completa:
-
-```toml
-[github]
-repository = "TUO_USERNAME/finanze-personali"
-branch = "dati"
-path = "finanze.xlsx"
-token = "IL_TUO_TOKEN_GITHUB"
-
-[accesso]
-password = "SCEGLI_UNA_PASSWORD_LUNGA"
-```
-
-Salva e avvia il deploy. Mantieni l'app **privata** nelle impostazioni di condivisione.
-L’app richiede anche la password personale configurata in [accesso]. Prima dell’accesso non legge l’archivio e non mostra le pagine finanziarie. Il pulsante Esci chiude la sessione. Se la password manca, l’app rimane bloccata.
-Al termine apri l'indirizzo `https://....streamlit.app` assegnato alla tua app.
-
-## Primo utilizzo
-
-1. In **Gestione → Conti**, imposta i saldi iniziali e personalizza i conti.
-2. Il saldo iniziale è ciò che avevi **prima del primo movimento registrato**.
-   Esempio: 500 € iniziali + 100 € di entrate − 20 € di uscite = 580 €.
-   Non registrare una seconda entrata per il saldo iniziale.
-3. Usa **+ Nuovo movimento** per entrate e uscite.
-4. Per le partite usa **Arbitraggio → + Nuova partita**: puoi inserire **Km percorsi** e
-   **Categoria della partita** (testo libero, distinta dalla categoria finanziaria).
-   I due campi sono modificabili anche dopo il pagamento e visibili nello storico.
-   Per le partite già registrate, Km parte da 0 e Categoria partita resta vuota.
-   Le colonne vengono aggiunte automaticamente all’Excel.
-   Per i pagamenti, lo stato iniziale è **Da ricevere**,
-   quindi il compenso non aumenta il saldo. Nello storico modifica **Stato**, **Data incasso**
-   e **Conto**, poi premi **Salva pagamenti**. Lo stato **Ricevuto** genera una sola entrata
-   alla data dell’incasso. Modificare o eliminare una partita aggiorna l’eventuale entrata.
-   Tornare a **Da ricevere** rimuove l’entrata collegata e ricalcola il saldo.
-   Puoi salvare più pagamenti insieme: se un dato è errato, nessuna modifica viene applicata.
-   Le partite delle versioni precedenti mantengono lo stato **Ricevuto** e la data della loro
-   entrata esistente, così l’aggiornamento non altera i saldi o duplica gli incassi.
-5. Puoi creare, rinominare o eliminare tutte le categorie in **Gestione → Categorie**.
-
-Il file iniziale non contiene movimenti di esempio: solo due conti a saldo zero e categorie modificabili.
-I movimenti manuali riguardano importi già ricevuti o pagati, con date fino a oggi. Le partite distinguono compensi previsti da incassi effettivi. Le partite possono avere compenso zero.
-
-## Come rimangono salvati i dati
-
-L'app legge `finanze.xlsx` dal ramo `dati` a ogni aggiornamento. Quando salvi, modifica i fogli necessari
-ed effettua **un unico commit dell'Excel su GitHub**. Mostra la conferma dopo il salvataggio remoto.
-
-La copia sul server Streamlit è solo una cache ricostruibile: se viene eliminata o l'app riparte,
-il file viene recuperato da GitHub. Se GitHub non è raggiungibile, l'app mostra un errore e non salva
-solo nella cache. Se il file manca su un ramo accessibile, lo crea; crea anche i fogli mancanti.
-Un Excel danneggiato produce un errore e non viene azzerato.
-
-Gli aggiornamenti controllano lo SHA del file: due sessioni non possono sovrascrivere silenziosamente
-le modifiche dell'altra. Se la connessione cade durante un salvataggio, l'app verifica se il commit
-è già riuscito e non ripete automaticamente il movimento senza verificarlo.
-
-Scarica l'Excel aggiornato da **Gestione → Archivio Excel** e aprilo normalmente con Excel.
-Le versioni precedenti rimangono nella cronologia GitHub del file sul ramo `dati`.
-Per ripristinare una versione, conserva prima una copia dell'ultima e sostituisci il file
-**sul ramo dati**, quindi premi **Aggiorna dati**.
-
-Usa l'app per modificare partite, categorie e conti, così i collegamenti restano coerenti.
-Non cambiare manualmente ID, intestazioni o il movimento collegato a una partita in Excel.
-
-## Gestione dello storico
-
-- Movimenti: filtri per data, tipo, conto e categoria, ricerca e area di modifica/eliminazione.
-- Arbitraggio: mese, anno o periodo, totale guadagnato, media e storico delle partite.
-- Statistiche: saldo nel tempo, confronto mensile e ripartizione per categoria/provenienza.
-- Rinomine di conti e categorie: aggiornano anche lo storico.
-- Eliminazione categoria: conserva i movimenti, riclassificandoli o lasciandoli senza categoria.
-- Eliminazione conto con dati: richiede un altro conto a cui riassegnare movimenti e saldo iniziale.
-  Il totale generale rimane invariato.
-
-## Fogli Excel
-
-| Foglio | Colonne |
-| --- | --- |
-| Movimenti | ID, Data, Tipo, Importo, Categoria, Descrizione, Fonte, Note, Data_creazione, Conto, Arbitraggio_ID |
-| Arbitraggio | ID, Data partita, Numero pacco, Squadra casa, Squadra ospite, Compenso, Note, Conto, Movimento_ID, Categoria |
-| Categorie | ID, Nome, Tipo |
-| Conti | ID, Nome, Saldo_iniziale |
-
-Date e importi sono valori Excel reali. Il numero pacco è testo e conserva gli zeri iniziali.
-Saldi e totali si calcolano in centesimi. Arbitraggio include anche le colonne Stato e Data incasso, aggiunte automaticamente.
-Il grafico del saldo include i movimenti precedenti al periodo scelto.
-
-## File principali
-
-- `app.py`: avvio su Streamlit Cloud e lettura dei Secrets.
-- `finanze_app/github_storage.py`: Excel persistente, concorrenza e verifica salvataggi.
-- `finanze_app/storage.py`: lettura/scrittura Excel con openpyxl.
-- `finanze_app/service.py`: movimenti, partite, conti e categorie.
-- `finanze_app/analytics.py`: saldi e statistiche.
-- `finanze_app/ui.py`, `styles.css`, `pages/`: moduli, grafici e layout responsive.
-- `secrets.example.toml`: modello da completare nei Secrets di Streamlit.
-
-## Solo per lo sviluppo
-
-I test usano file temporanei e un GitHub simulato, senza modificare repository reali:
+`app.py`: login e navigazione; `sheets_storage.py`: Google Sheets; `service.py`: regole finanziarie e pagamenti; `analytics.py`: DataFrame e statistiche; `pages/`: interfaccia; `export.py`: copia Excel.
 
 ```bash
-python -m pip install -r requirements.txt pytest
-python -m pytest tests -q
+pip install -r requirements.txt
+streamlit run app.py
 ```
 
-La variabile `FINANZE_FILE` permette un Excel locale per lo sviluppo offline.
-Senza questa variabile, l'app richiede la configurazione GitHub e non ripiega sui soli file del server.
-
-Documentazione ufficiale:
-
-- https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/deploy
-- https://docs.streamlit.io/deploy/streamlit-community-cloud/deploy-your-app/secrets-management
-- https://docs.streamlit.io/develop/concepts/connections/connecting-to-data
-- https://docs.github.com/en/rest/repos/contents
-- https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/managing-your-personal-access-tokens
+In locale inserisci i Secrets in `.streamlit/secrets.toml` (ignorato da Git). Per i test isolati rimane l'adattatore Excel `storage.py`: è usato esclusivamente quando si imposta esplicitamente `FINANZE_FILE`, non come fallback online. Per eseguire i test: `pip install pytest`, poi `pytest -q`.
