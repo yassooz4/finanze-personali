@@ -5,6 +5,7 @@ from pathlib import Path
 import streamlit as st
 
 from finanze_app import ui
+from finanze_app.auth import require_login, logout
 from finanze_app.errors import FinanceError, StorageError
 from finanze_app.github_storage import cloud_store
 from finanze_app.pages import dashboard, movements, referee, settings, statistics
@@ -39,10 +40,12 @@ def create_service():
 def main():
     st.set_page_config(page_title="Finanze · Il tuo spazio personale", page_icon="💶", layout="wide", initial_sidebar_state="auto")
     ui.apply_style()
+    require_login()
     with st.sidebar:
         st.markdown('<div class="brand"><div class="brand-mark">f</div><div><div class="brand-name">finanze</div><div class="brand-caption">il tuo spazio personale</div></div></div><div class="nav-caption">IL TUO SPAZIO</div>', unsafe_allow_html=True)
         page = st.radio("Navigazione", list(PAGES), label_visibility="collapsed", key="page")
         st.divider()
+        st.button("🔒 Esci", on_click=logout, width="stretch")
         if st.button("↻ Aggiorna dati", width="stretch"):
             st.rerun()
         st.markdown('<div class="sidebar-note"><b>Un unico posto per i tuoi soldi</b>Conti, spese e partite.<br>Versione 1.0</div>', unsafe_allow_html=True)

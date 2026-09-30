@@ -19,7 +19,11 @@ def widget(elements, label):
 def app(tmp_path, monkeypatch):
     path = tmp_path / "finanze.xlsx"
     monkeypatch.setenv("FINANZE_FILE", str(path))
-    app_test = AppTest.from_file(str(APP), default_timeout=30).run()
+    app_test = AppTest.from_file(str(APP), default_timeout=30)
+    app_test.secrets["accesso"] = {"password": "test-password"}
+    app_test.run()
+    app_test.text_input(key="_login_password").set_value("test-password")
+    app_test.button[0].click().run()
     assert not app_test.exception
     return app_test, FinanceService(path)
 

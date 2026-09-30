@@ -56,10 +56,13 @@ repository = "TUO_USERNAME/finanze-personali"
 branch = "dati"
 path = "finanze.xlsx"
 token = "IL_TUO_TOKEN_GITHUB"
+
+[accesso]
+password = "SCEGLI_UNA_PASSWORD_LUNGA"
 ```
 
 Salva e avvia il deploy. Mantieni l'app **privata** nelle impostazioni di condivisione.
-L'accesso è gestito da Streamlit: l'app non introduce un proprio sistema di login.
+L’app richiede anche la password personale configurata in [accesso]. Prima dell’accesso non legge l’archivio e non mostra le pagine finanziarie. Il pulsante Esci chiude la sessione. Se la password manca, l’app rimane bloccata.
 Al termine apri l'indirizzo `https://....streamlit.app` assegnato alla tua app.
 
 ## Primo utilizzo
