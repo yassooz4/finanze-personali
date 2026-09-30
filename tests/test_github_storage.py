@@ -58,7 +58,7 @@ def test_remote_referee_stays_synchronized_after_restart(tmp_path):
     remote = FakeRemote()
     service = remote_service(tmp_path / "a.xlsx", remote)
     service.snapshot()
-    match_id = service.save_match(date=today(), package="0007", home="Casa", away="Ospiti", fee=50, account="Conto personale", category="Arbitraggio")
+    match_id = service.save_match(date=today(), package="0007", home="Casa", away="Ospiti", fee=50, status="Ricevuto", received_date=today(), account="Conto personale", category="Arbitraggio")
     recreated = remote_service(tmp_path / "new-server.xlsx", remote)
     snapshot = recreated.snapshot()
     assert total_balance(snapshot) == 50
@@ -160,3 +160,20 @@ def test_large_excel_uses_immutable_blob_sha(monkeypatch):
     monkeypatch.setattr(client, "_request", request)
     assert client.read() == (b"large workbook", "stable-sha")
     assert calls[-1].endswith("/git/blobs/stable-sha")
+
+
+def test_pending_payment_and_reversal_survive_remote_restart(tmp_path):
+    remote = FakeRemote()
+    service = remote_service(tmp_path / "first.xlsx", remote)
+    service.snapshot()
+    service.save_match(date=today(), package="0010", home="A", away="B", fee=65, category="Arbitraggio")
+    other = remote_service(tmp_path / "second.xlsx", remote)
+    snapshot = other.snapshot()
+    assert snapshot.movements.empty and total_balance(snapshot) == 0
+    record = snapshot.tables["Arbitraggio"][0]
+    other.update_match_payments([{"ID": record["ID"], "Stato": "Ricevuto", "Data incasso": today(), "Conto": "Contanti", "expected": record}])
+    snapshot = service.snapshot()
+    assert total_balance(snapshot) == 65 and len(snapshot.movements) == 1
+    paid = snapshot.tables["Arbitraggio"][0]
+    service.update_match_payments([{"ID": paid["ID"], "Stato": "Da ricevere", "Data incasso": None, "Conto": "", "expected": paid}])
+    assert other.snapshot().movements.empty and total_balance(other.snapshot()) == 0

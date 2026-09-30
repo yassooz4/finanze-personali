@@ -61,13 +61,15 @@ def test_match_form_edit_and_delete_update_finances(app):
     widget(at.text_input, "Numero pacco").set_value("0007")
     widget(at.text_input, "Squadra di casa").set_value("Casa")
     widget(at.text_input, "Squadra ospite").set_value("Ospiti")
-    widget(at.number_input, "Compenso ricevuto (€)").set_value(55)
-    widget(at.button, "Salva partita e accredita entrata").click().run()
+    widget(at.selectbox, "Stato pagamento").set_value("Ricevuto").run()
+    widget(at.selectbox, "Accredita sul conto").set_value("Conto personale")
+    widget(at.number_input, "Compenso previsto (€)").set_value(55)
+    widget(at.button, "Salva partita").click().run()
     assert not at.exception
     assert total_balance(service.snapshot()) == 55
     at.selectbox(key="selected_match").select_index(1).run()
     widget(at.button, "Modifica partita").click().run()
-    widget(at.number_input, "Compenso ricevuto (€)").set_value(70)
+    widget(at.number_input, "Compenso previsto (€)").set_value(70)
     widget(at.button, "Salva modifiche").click().run()
     assert not at.exception
     assert total_balance(service.snapshot()) == 70
@@ -167,7 +169,7 @@ def test_account_rename_and_reassignment_through_settings(app):
     at, service = app
     account_id = service.snapshot().accounts[0]["ID"]
     service.save_account(name="Conto personale", opening_balance=100, account_id=account_id)
-    service.save_match(date=today(), package="17", home="A", away="B", fee=45, account="Conto personale", category="Arbitraggio")
+    service.save_match(date=today(), package="17", home="A", away="B", fee=45, status="Ricevuto", received_date=today(), account="Conto personale", category="Arbitraggio")
     at.sidebar.radio[0].set_value("⚙️ Gestione").run()
     at.selectbox(key="manage_account").set_value(account_id).run()
     widget(at.text_input, "Rinomina conto").set_value("Principale")

@@ -19,7 +19,7 @@ def movement(service, **changes):
 
 
 def match(service, **changes):
-    values = dict(date=today(), package="0012", home="Squadra A", away="Squadra B", fee=45.0, account="Conto personale", category="Arbitraggio", notes="Rimborso")
+    values = dict(date=today(), package="0012", home="Squadra A", away="Squadra B", fee=45.0, status="Ricevuto", received_date=today(), account="Conto personale", category="Arbitraggio", notes="Rimborso")
     values.update(changes)
     return service.save_match(**values)
 
@@ -70,7 +70,7 @@ def test_match_creates_one_income_and_edit_preserves_link(service):
     created = snapshot.tables["Movimenti"][0]["Data_creazione"]
     assert len(snapshot.movements) == len(snapshot.matches) == 1
     assert stats.total_balance(snapshot) == 45
-    service.save_match(date=today(), package="0013", home="A", away="C", fee=60.5, account="Contanti", category="Altro", notes="Modificata", match_id=match_id, expected=first)
+    service.save_match(date=today(), package="0013", home="A", away="C", fee=60.5, status="Ricevuto", received_date=today(), account="Contanti", category="Altro", notes="Modificata", match_id=match_id, expected=first)
     snapshot = service.snapshot()
     entry = snapshot.tables["Movimenti"][0]
     assert len(snapshot.movements) == 1

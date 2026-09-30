@@ -30,6 +30,7 @@ class Snapshot:
     def matches(self) -> pd.DataFrame:
         frame = pd.DataFrame(self.tables["Arbitraggio"], columns=SCHEMA["Arbitraggio"])
         frame["Data partita"] = pd.to_datetime(frame["Data partita"])
+        frame["Data incasso"] = pd.to_datetime(frame["Data incasso"])
         return frame
 
     @property
@@ -126,9 +127,25 @@ class FinanceService:
                         row["Compenso"] = money(row.get("Compenso"), nonnegative=True)
                         for field in ("Numero pacco", "Squadra casa", "Squadra ospite", "Note", "Conto", "Movimento_ID", "Categoria"):
                             row[field] = text(row.get(field), label=field, limit=5000 if field == "Note" else 2000)
-                        for field in ("Numero pacco", "Squadra casa", "Squadra ospite", "Conto", "Movimento_ID"):
+                        for field in ("Numero pacco", "Squadra casa", "Squadra ospite"):
                             if not row[field]:
                                 raise ValidationError(f"{field} è obbligatorio.")
+                        # Old records were already credited: preserve their movement and date.
+                        state = text(row.get("Stato"))
+                        if not state:
+                            state = "Ricevuto" if row["Movimento_ID"] else "Da ricevere"
+                            if state == "Ricevuto" and not row.get("Data incasso"):
+                                linked = next((m for m in tables["Movimenti"] if m["ID"] == row["Movimento_ID"]), None)
+                                row["Data incasso"] = linked["Data"] if linked else row["Data partita"]
+                        if state not in ("Da ricevere", "Ricevuto"):
+                            raise ValidationError("Stato pagamento non valido.")
+                        row["Stato"] = state
+                        if state == "Ricevuto":
+                            row["Data incasso"] = as_date(row.get("Data incasso"), past_only=True)
+                            if row["Data incasso"] < row["Data partita"]:
+                                raise ValidationError("L'incasso non può precedere la partita.")
+                        else:
+                            row["Data incasso"] = None
                 except ValidationError as exc:
                     raise ValidationError(f"{sheet}, riga {number}: {exc}") from exc
         for sheet in ("Conti", "Categorie"):
@@ -147,9 +164,15 @@ class FinanceService:
             if match_id and (match_id not in matches or matches[match_id]["Movimento_ID"] != movement["ID"]):
                 raise ValidationError("Un movimento di arbitraggio non ha la partita collegata. Controlla gli ID nell'Excel.")
         for match in matches.values():
-            self._validate_account(tables, match["Conto"])
+            if match["Conto"]:
+                self._validate_account(tables, match["Conto"])
             self._validate_category(tables, match["Categoria"], "Entrata")
             movement_id = match["Movimento_ID"]
+            if match["Stato"] == "Da ricevere":
+                if movement_id:
+                    raise ValidationError("Una partita da ricevere non deve avere un'entrata collegata.")
+                continue
+            self._validate_account(tables, match["Conto"])
             if movement_id in linked_ids or movement_id not in movements:
                 raise ValidationError("Una partita ha un movimento mancante o duplicato. Controlla gli ID nell'Excel.")
             linked_ids.add(movement_id)
@@ -159,7 +182,7 @@ class FinanceService:
                 or movement["Tipo"] != "Entrata"
                 or movement["Fonte"] != "Arbitraggio"
                 or cents(movement["Importo"]) != cents(match["Compenso"])
-                or movement["Data"] != match["Data partita"]
+                or movement["Data"] != match["Data incasso"]
                 or movement["Conto"] != match["Conto"]
                 or movement["Categoria"] != match["Categoria"]
             ):
@@ -217,9 +240,32 @@ class FinanceService:
             tables["Movimenti"] = [movement for movement in tables["Movimenti"] if movement["ID"] != movement_id]
         self._mutate(operation)
 
-    def save_match(self, *, date, package, home, away, fee, account, category="", notes="", match_id=None, expected=None):
+    def _set_payment(self, tables, row, *, status, received_date, account):
+        if status not in ("Da ricevere", "Ricevuto"):
+            raise ValidationError("Seleziona Da ricevere o Ricevuto.")
+        if status == "Da ricevere":
+            tables["Movimenti"] = [m for m in tables["Movimenti"] if m["ID"] != row["Movimento_ID"]]
+            row.update({"Stato": status, "Data incasso": None, "Movimento_ID": "", "Conto": ""})
+            return
+        self._validate_account(tables, account)
+        payment_date = as_date(received_date, past_only=True)
+        if payment_date < row["Data partita"]:
+            raise ValidationError("La data d'incasso non può precedere la partita.")
+        row.update({"Stato": status, "Data incasso": payment_date, "Conto": account})
+        if row["Movimento_ID"]:
+            movement = self._get(tables, "Movimenti", row["Movimento_ID"])
+        else:
+            row["Movimento_ID"] = new_id("M")
+            movement = {"ID": row["Movimento_ID"], "Data_creazione": timestamp(), "Arbitraggio_ID": row["ID"]}
+            tables["Movimenti"].append(movement)
+        movement.update({
+            "Data": payment_date, "Tipo": "Entrata", "Importo": row["Compenso"],
+            "Categoria": row["Categoria"], "Descrizione": f"{row['Squadra casa']} – {row['Squadra ospite']} · Pacco {row['Numero pacco']}",
+            "Fonte": "Arbitraggio", "Note": row["Note"], "Conto": account,
+        })
+
+    def save_match(self, *, date, package, home, away, fee, account="", category="", notes="", match_id=None, expected=None, status="Da ricevere", received_date=None):
         def operation(tables):
-            self._validate_account(tables, account)
             category_name = text(category)
             self._validate_category(tables, category_name, "Entrata")
             row = None
@@ -232,23 +278,29 @@ class FinanceService:
                 "Squadra casa": text(home, label="La squadra di casa", required=True, limit=120),
                 "Squadra ospite": text(away, label="La squadra ospite", required=True, limit=120),
                 "Compenso": money(fee, nonnegative=True), "Note": text(notes, limit=5000),
-                "Conto": account, "Categoria": category_name,
+                "Categoria": category_name,
             }
             if row is None:
-                row = {"ID": new_id("P"), "Movimento_ID": new_id("M"), **values}
-                movement = {"ID": row["Movimento_ID"], "Data_creazione": timestamp(), "Arbitraggio_ID": row["ID"]}
+                row = {"ID": new_id("P"), "Movimento_ID": "", **values}
                 tables["Arbitraggio"].append(row)
-                tables["Movimenti"].append(movement)
             else:
                 row.update(values)
-                movement = self._get(tables, "Movimenti", row["Movimento_ID"])
-            movement.update({
-                "Data": row["Data partita"], "Tipo": "Entrata", "Importo": row["Compenso"],
-                "Categoria": category_name, "Descrizione": f"{row['Squadra casa']} – {row['Squadra ospite']} · Pacco {row['Numero pacco']}",
-                "Fonte": "Arbitraggio", "Note": row["Note"], "Conto": account,
-            })
+            self._set_payment(tables, row, status=status, received_date=received_date, account=account)
             return row["ID"]
         return self._mutate(operation)
+
+    def update_match_payments(self, updates):
+        """Save all edited payments atomically, with stale-record checks."""
+        def operation(tables):
+            seen = set()
+            for update in updates:
+                if update["ID"] in seen:
+                    raise ValidationError("Partita duplicata nell'aggiornamento.")
+                seen.add(update["ID"])
+                row = self._get(tables, "Arbitraggio", update["ID"])
+                self._expected(row, update["expected"])
+                self._set_payment(tables, row, status=update["Stato"], received_date=update["Data incasso"], account=update["Conto"])
+        self._mutate(operation)
 
     def delete_match(self, match_id, *, expected=None):
         def operation(tables):
@@ -268,7 +320,8 @@ class FinanceService:
                 row = self._get(tables, "Categorie", category_id)
                 self._expected(row, expected)
                 old_name = row["Nome"]
-                if any(m["Categoria"] == old_name and kind not in (m["Tipo"], "Entrambe") for m in tables["Movimenti"]):
+                if (any(m["Categoria"] == old_name and kind not in (m["Tipo"], "Entrambe") for m in tables["Movimenti"])
+                        or any(m["Categoria"] == old_name and kind not in ("Entrata", "Entrambe") for m in tables["Arbitraggio"])):
                     raise ValidationError("Questa categoria è già usata per un altro tipo di movimento. Scegli Entrambe o riclassifica i movimenti.")
                 row.update({"Nome": label, "Tipo": kind})
                 for sheet in ("Movimenti", "Arbitraggio"):
@@ -296,6 +349,7 @@ class FinanceService:
                     record["Categoria"] = target
             for record in tables["Arbitraggio"]:
                 if record["Categoria"] == row["Nome"]:
+                    self._validate_category(tables, target, "Entrata")
                     record["Categoria"] = target
             tables["Categorie"] = [category for category in tables["Categorie"] if category["ID"] != category_id]
         self._mutate(operation)

@@ -279,13 +279,12 @@ def movement_dialog(service, *, token, movement=None):
 def match_dialog(service, *, token, match=None):
     snapshot = service.snapshot()
     accounts = snapshot.account_names()
-    if not accounts:
-        st.info("Crea prima un conto nella pagina Gestione.")
-        return
     original = match or {}
     categories = [""] + snapshot.category_names("Entrata")
     default_category = original.get("Categoria", "Arbitraggio" if "Arbitraggio" in categories else "")
-    st.caption("Il compenso viene registrato anche come entrata nel conto scelto, una sola volta.")
+    st.caption("Il compenso entra nel saldo solo quando il pagamento è Ricevuto.")
+    statuses = ["Da ricevere", "Ricevuto"]
+    status = st.selectbox("Stato pagamento", statuses, index=_index(statuses, original.get("Stato", "Da ricevere")), key=f"{token}_status")
     with st.form(f"{token}_form"):
         col1, col2 = st.columns(2)
         date_value = col1.date_input("Data della partita", value=original.get("Data partita", today()), min_value=date(1900, 1, 1), max_value=today(), format="DD/MM/YYYY", key=f"{token}_date")
@@ -293,19 +292,25 @@ def match_dialog(service, *, token, match=None):
         col1, col2 = st.columns(2)
         home = col1.text_input("Squadra di casa", value=original.get("Squadra casa", ""), max_chars=120, key=f"{token}_home")
         away = col2.text_input("Squadra ospite", value=original.get("Squadra ospite", ""), max_chars=120, key=f"{token}_away")
-        col1, col2 = st.columns(2)
-        fee = col1.number_input("Compenso ricevuto (€)", min_value=0.0, max_value=999999999999.99, value=float(original.get("Compenso", 0.0)), step=.01, format="%.2f", key=f"{token}_fee")
-        account = col2.selectbox("Accredita sul conto", accounts, index=_index(accounts, original.get("Conto")), key=f"{token}_account")
+        fee = st.number_input("Compenso previsto (€)", min_value=0.0, max_value=999999999999.99, value=float(original.get("Compenso", 0.0)), step=.01, format="%.2f", key=f"{token}_fee")
+        received_date, account = None, ""
+        if status == "Ricevuto":
+            col1, col2 = st.columns(2)
+            received_date = col1.date_input("Data incasso", value=original.get("Data incasso") or today(), min_value=date(1900, 1, 1), max_value=today(), format="DD/MM/YYYY", key=f"{token}_received")
+            account_options = [""] + accounts
+            account = col2.selectbox("Accredita sul conto", account_options, index=_index(account_options, original.get("Conto")), format_func=lambda x: x or "Scegli il conto", key=f"{token}_account")
         category = st.selectbox("Categoria dell'entrata", categories, index=_index(categories, default_category), format_func=lambda value: value or "Senza categoria", key=f"{token}_category")
         notes = st.text_area("Note (facoltative)", value=original.get("Note", ""), max_chars=5000, height=80, key=f"{token}_notes")
-        submitted = st.form_submit_button("Salva modifiche" if match else "Salva partita e accredita entrata", type="primary", width="stretch")
+        if original.get("Stato") == "Ricevuto" and status == "Da ricevere":
+            st.warning("Salvando Da ricevere, l'entrata collegata verrà rimossa dal saldo.")
+        submitted = st.form_submit_button("Salva modifiche" if match else "Salva partita", type="primary", width="stretch")
         if submitted:
             try:
-                service.save_match(date=date_value, package=package, home=home, away=away, fee=fee, account=account, category=category, notes=notes, match_id=original.get("ID"), expected=match)
+                service.save_match(date=date_value, package=package, home=home, away=away, fee=fee, account=account, category=category, notes=notes, match_id=original.get("ID"), expected=match, status=status, received_date=received_date)
             except FinanceError as exc:
                 st.error(str(exc))
             else:
-                flash("Partita salvata e relativa entrata aggiornata.")
+                flash("Partita salvata. " + ("Incasso aggiornato." if status == "Ricevuto" else "Compenso ancora da ricevere, saldo invariato."))
 
 
 @st.dialog("Elimina elemento", on_dismiss=close_editor)

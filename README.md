@@ -72,12 +72,18 @@ Al termine apri l'indirizzo `https://....streamlit.app` assegnato alla tua app.
    Esempio: 500 € iniziali + 100 € di entrate − 20 € di uscite = 580 €.
    Non registrare una seconda entrata per il saldo iniziale.
 3. Usa **+ Nuovo movimento** per entrate e uscite.
-4. Per le partite usa **Arbitraggio → + Nuova partita**: il compenso genera una sola entrata
-   nel conto scelto. Modificare o eliminare la partita aggiorna anche quell'entrata.
+4. Per le partite usa **Arbitraggio → + Nuova partita**: lo stato iniziale è **Da ricevere**,
+   quindi il compenso non aumenta il saldo. Nello storico modifica **Stato**, **Data incasso**
+   e **Conto**, poi premi **Salva pagamenti**. Lo stato **Ricevuto** genera una sola entrata
+   alla data dell’incasso. Modificare o eliminare una partita aggiorna l’eventuale entrata.
+   Tornare a **Da ricevere** rimuove l’entrata collegata e ricalcola il saldo.
+   Puoi salvare più pagamenti insieme: se un dato è errato, nessuna modifica viene applicata.
+   Le partite delle versioni precedenti mantengono lo stato **Ricevuto** e la data della loro
+   entrata esistente, così l’aggiornamento non altera i saldi o duplica gli incassi.
 5. Puoi creare, rinominare o eliminare tutte le categorie in **Gestione → Categorie**.
 
 Il file iniziale non contiene movimenti di esempio: solo due conti a saldo zero e categorie modificabili.
-Si registrano importi già ricevuti o pagati, con date fino a oggi. Le partite possono avere compenso zero.
+I movimenti manuali riguardano importi già ricevuti o pagati, con date fino a oggi. Le partite distinguono compensi previsti da incassi effettivi. Le partite possono avere compenso zero.
 
 ## Come rimangono salvati i dati
 
@@ -121,7 +127,8 @@ Non cambiare manualmente ID, intestazioni o il movimento collegato a una partita
 | Conti | ID, Nome, Saldo_iniziale |
 
 Date e importi sono valori Excel reali. Il numero pacco è testo e conserva gli zeri iniziali.
-Saldi e totali si calcolano in centesimi. Il grafico del saldo include i movimenti precedenti al periodo scelto.
+Saldi e totali si calcolano in centesimi. Arbitraggio include anche le colonne Stato e Data incasso, aggiunte automaticamente.
+Il grafico del saldo include i movimenti precedenti al periodo scelto.
 
 ## File principali
 

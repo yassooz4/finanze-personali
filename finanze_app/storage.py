@@ -28,7 +28,7 @@ SCHEMA = {
     ],
     "Arbitraggio": [
         "ID", "Data partita", "Numero pacco", "Squadra casa", "Squadra ospite",
-        "Compenso", "Note", "Conto", "Movimento_ID", "Categoria",
+        "Compenso", "Note", "Conto", "Movimento_ID", "Categoria", "Stato", "Data incasso",
     ],
     "Categorie": ["ID", "Nome", "Tipo"],
     "Conti": ["ID", "Nome", "Saldo_iniziale"],
@@ -147,7 +147,7 @@ class ExcelStore:
                 width = 46
             elif header in ("Importo", "Compenso", "Saldo_iniziale"):
                 width = 20
-            elif header in ("Data", "Data partita"):
+            elif header in ("Data", "Data partita", "Data incasso"):
                 width = 18
             elif header == "Data_creazione":
                 width = 23
@@ -159,7 +159,7 @@ class ExcelStore:
                 cell.fill = PatternFill("solid", fgColor="F2F6FA" if cell.row % 2 == 0 else "FFFFFF")
                 if header in ("Importo", "Compenso", "Saldo_iniziale"):
                     cell.number_format = '#,##0.00" €"'
-                elif header in ("Data", "Data partita"):
+                elif header in ("Data", "Data partita", "Data incasso"):
                     cell.number_format = "dd/mm/yyyy"
                 elif header == "Data_creazione":
                     cell.number_format = "dd/mm/yyyy hh:mm:ss"

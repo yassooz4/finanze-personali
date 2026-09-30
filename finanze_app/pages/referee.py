@@ -1,4 +1,10 @@
+import hashlib
+
+import pandas as pd
 import streamlit as st
+
+from ..errors import FinanceError
+from ..utils import cents, today
 
 from .. import analytics as stats
 from .. import ui
@@ -10,14 +16,22 @@ def render(service, snapshot):
     frame = snapshot.matches
     start, end = ui.period_filter(frame, key="referee", column="Data partita")
     filtered = stats.date_filter(frame, start, end, column="Data partita")
+    selected_status = st.selectbox("Filtra per pagamento", ["Tutti", "Da ricevere", "Ricevuto"], key="referee_status_filter")
+    if selected_status != "Tutti":
+        filtered = filtered.loc[filtered["Stato"] == selected_status].copy()
     count, earned, average = stats.match_totals(filtered)
+    received = sum(cents(v) for v in filtered.loc[filtered["Stato"] == "Ricevuto", "Compenso"]) / 100
+    pending = sum(cents(v) for v in filtered.loc[filtered["Stato"] == "Da ricevere", "Compenso"]) / 100
     ui.metrics([
         ("Partite arbitrate", str(count), "Nel periodo selezionato", "⚽", ""),
-        ("Totale guadagnato", euro(earned), "Già incluso nelle tue entrate", "↙", ""),
+        ("Compensi totali", euro(earned), "Ricevuti e da ricevere", "€", ""),
+        ("Soldi ricevuti", euro(received), "Inclusi nel saldo dei conti", "↙", ""),
+        ("Da ricevere", euro(pending), "Ancora da incassare", "◷", ""),
         ("Media per partita", euro(average), "Nel periodo selezionato", "≈", ""),
     ])
     with st.container(border=True, key="panel_referee_1"):
-        st.subheader("Guadagni per mese")
+        st.subheader("Compensi per mese di partita")
+        st.caption("Compensi delle partite selezionate. Le entrate finanziarie seguono invece la data d’incasso.")
         ui.match_chart(stats.match_monthly(filtered), "referee_monthly")
     with st.container(border=True, key="panel_referee_2"):
         st.subheader("Storico delle partite")
@@ -26,9 +40,36 @@ def render(service, snapshot):
         else:
             display = filtered.sort_values("Data partita", ascending=False).copy()
             display["Partita"] = display["Squadra casa"] + " – " + display["Squadra ospite"]
-            display["Compenso"] = display["Compenso"].map(euro)
-            display = display[["Data partita", "Partita", "Numero pacco", "Compenso", "Conto", "Note"]].rename(columns={"Data partita": "Data", "Numero pacco": "N° pacco"})
-            st.dataframe(display, hide_index=True, width="stretch", column_config={"Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY")})
+            display["Data incasso"] = display["Data incasso"].dt.date
+            display["Data partita"] = display["Data partita"].dt.date
+            display = display.set_index("ID")[["Data partita", "Partita", "Numero pacco", "Compenso", "Stato", "Data incasso", "Conto", "Note"]].rename(columns={"Data partita": "Data", "Numero pacco": "N° pacco"})
+            records = {row["ID"]: row for row in snapshot.tables["Arbitraggio"]}
+            revision = hashlib.sha256(repr(snapshot.tables["Arbitraggio"]).encode()).hexdigest()[:16]
+            st.caption("Modifica Stato, Data incasso e Conto nella tabella, poi premi Salva pagamenti. Ricevuto richiede data e conto. Da ricevere rimuove l'eventuale entrata collegata.")
+            edited = st.data_editor(display, hide_index=True, width="stretch", num_rows="fixed", disabled=["Data", "Partita", "N° pacco", "Compenso", "Note"], key=f"referee_payments_{revision}", column_config={
+                "Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY"),
+                "Compenso": st.column_config.NumberColumn("Compenso", format="%.2f €"),
+                "Stato": st.column_config.SelectboxColumn("Stato", options=["Da ricevere", "Ricevuto"], required=True),
+                "Data incasso": st.column_config.DateColumn("Data incasso", format="DD/MM/YYYY", max_value=today()),
+                "Conto": st.column_config.SelectboxColumn("Conto", options=[""] + snapshot.account_names()),
+            })
+            if st.button("Salva pagamenti", type="primary", key="save_payments"):
+                updates = []
+                for match_id, row in edited.iterrows():
+                    old = records[match_id]
+                    payment_date = None if pd.isna(row["Data incasso"]) else row["Data incasso"]
+                    account = row["Conto"] if isinstance(row["Conto"], str) else ""
+                    if (row["Stato"], payment_date, account) != (old["Stato"], old["Data incasso"], old["Conto"]):
+                        updates.append({"ID": match_id, "Stato": row["Stato"], "Data incasso": payment_date, "Conto": account, "expected": old})
+                if not updates:
+                    st.info("Nessuna modifica da salvare.")
+                else:
+                    try:
+                        service.update_match_payments(updates)
+                    except FinanceError as exc:
+                        st.error(str(exc))
+                    else:
+                        ui.flash("Pagamenti salvati. Saldi e statistiche aggiornati.")
     if filtered.empty:
         return
     with st.expander("Modifica o elimina una partita", expanded=True):
@@ -47,4 +88,4 @@ def render(service, snapshot):
                 ui.open_editor("match", record)
             if right.button("Elimina partita", width="stretch"):
                 ui.open_editor("delete_match", record)
-            st.caption("Modifica ed eliminazione aggiornano automaticamente l'entrata collegata.")
+            st.caption("Modifica ed eliminazione aggiornano l'eventuale entrata già incassata.")
