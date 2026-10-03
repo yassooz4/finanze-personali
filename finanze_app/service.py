@@ -11,7 +11,7 @@ from .storage import SCHEMA, ExcelStore
 from .utils import as_date, cents, money, new_id, text, timestamp
 
 
-KINDS = ("Entrata", "Uscita")
+KINDS = ("Entrata", "Uscita", "Giroconto")
 CATEGORY_KINDS = ("Entrata", "Uscita", "Entrambe")
 
 
@@ -106,10 +106,10 @@ class FinanceService:
                         row["Data"] = as_date(row.get("Data"), past_only=True)
                         row["Tipo"] = text(row.get("Tipo"))
                         if row["Tipo"] not in KINDS:
-                            raise ValidationError("Il tipo deve essere Entrata o Uscita.")
+                            raise ValidationError("Il tipo deve essere Entrata, Uscita o Giroconto.")
                         row["Arbitraggio_ID"] = text(row.get("Arbitraggio_ID"))
                         row["Importo"] = money(row.get("Importo"), positive=not bool(row["Arbitraggio_ID"]), nonnegative=True)
-                        for field in ("Categoria", "Fonte", "Note", "Conto", "Descrizione"):
+                        for field in ("Categoria", "Fonte", "Note", "Conto", "Conto_destinazione", "Descrizione"):
                             row[field] = text(row.get(field), label=field, limit=5000 if field == "Note" else 2000)
                         if not row["Descrizione"]:
                             raise ValidationError("La descrizione è obbligatoria.")
@@ -161,7 +161,16 @@ class FinanceService:
         linked_ids = set()
         for movement in movements.values():
             self._validate_account(tables, movement["Conto"])
-            self._validate_category(tables, movement["Categoria"], movement["Tipo"])
+            if movement["Tipo"] == "Giroconto":
+                self._validate_account(tables, movement["Conto_destinazione"])
+                if movement["Conto"] == movement["Conto_destinazione"]:
+                    raise ValidationError("Per un giroconto scegli due conti diversi.")
+                if movement["Categoria"] or movement["Arbitraggio_ID"]:
+                    raise ValidationError("Un giroconto non può avere una categoria finanziaria o una partita collegata.")
+            else:
+                if movement["Conto_destinazione"]:
+                    raise ValidationError("Il conto di arrivo si usa soltanto nei giroconti.")
+                self._validate_category(tables, movement["Categoria"], movement["Tipo"])
             match_id = movement["Arbitraggio_ID"]
             if match_id and (match_id not in matches or matches[match_id]["Movimento_ID"] != movement["ID"]):
                 raise ValidationError("Un movimento di arbitraggio non ha la partita collegata. Controlla gli ID nell'Excel.")
@@ -206,13 +215,20 @@ class FinanceService:
             return result
         return self.store.transaction(transaction)
 
-    def save_movement(self, *, kind, amount, date, description, category, source, account, notes="", movement_id=None, expected=None):
+    def save_movement(self, *, kind, amount, date, description, category, source, account, notes="", movement_id=None, expected=None, destination_account=""):
         def operation(tables):
             if kind not in KINDS:
-                raise ValidationError("Seleziona Entrata o Uscita.")
+                raise ValidationError("Seleziona Entrata, Uscita o Giroconto.")
             self._validate_account(tables, account)
-            category_name = text(category)
-            self._validate_category(tables, category_name, kind)
+            is_transfer = kind == "Giroconto"
+            destination = text(destination_account) if is_transfer else ""
+            if is_transfer:
+                self._validate_account(tables, destination)
+                if account == destination:
+                    raise ValidationError("Scegli un conto di arrivo diverso dal conto di partenza.")
+            category_name = "" if is_transfer else text(category)
+            if not is_transfer:
+                self._validate_category(tables, category_name, kind)
             row = None
             if movement_id:
                 row = self._get(tables, "Movimenti", movement_id)
@@ -222,8 +238,9 @@ class FinanceService:
             values = {
                 "Data": as_date(date, past_only=True), "Tipo": kind,
                 "Importo": money(amount, positive=True), "Categoria": category_name,
-                "Descrizione": text(description, label="La descrizione", required=True),
-                "Fonte": text(source), "Conto": account, "Note": text(notes, limit=5000),
+                "Descrizione": text(description, label="La descrizione", required=not is_transfer) or "Giroconto",
+                "Fonte": "Giroconto" if is_transfer else text(source), "Conto": account,
+                "Conto_destinazione": destination, "Note": text(notes, limit=5000),
             }
             if row is None:
                 row = {"ID": new_id("M"), "Data_creazione": timestamp(), "Arbitraggio_ID": "", **values}
@@ -264,6 +281,7 @@ class FinanceService:
             "Data": payment_date, "Tipo": "Entrata", "Importo": row["Compenso"],
             "Categoria": row["Categoria"], "Descrizione": f"{row['Squadra casa']} – {row['Squadra ospite']} · Pacco {row['Numero pacco']}",
             "Fonte": "Arbitraggio", "Note": row["Note"], "Conto": account,
+            "Conto_destinazione": "",
         })
 
     def save_match(self, *, date, package, home, away, fee, account="", category="", notes="", match_id=None, expected=None, status="Da ricevere", received_date=None, km=None, match_category=None):
@@ -372,6 +390,8 @@ class FinanceService:
                     for record in tables[sheet]:
                         if record["Conto"] == old_name:
                             record["Conto"] = label
+                        if sheet == "Movimenti" and record["Conto_destinazione"] == old_name:
+                            record["Conto_destinazione"] = label
             else:
                 row = {"ID": new_id("A"), "Nome": label, "Saldo_iniziale": initial}
                 tables["Conti"].append(row)
@@ -382,17 +402,21 @@ class FinanceService:
         def operation(tables):
             row = self._get(tables, "Conti", account_id)
             self._expected(row, expected)
-            used = any(m["Conto"] == row["Nome"] for m in tables["Movimenti"])
+            used = any(row["Nome"] in (m["Conto"], m["Conto_destinazione"]) for m in tables["Movimenti"])
             if replacement:
                 if replacement == row["Nome"]:
                     raise ValidationError("Seleziona un altro conto.")
                 self._validate_account(tables, replacement)
+                if any(m["Tipo"] == "Giroconto" and {m["Conto"], m["Conto_destinazione"]} == {row["Nome"], replacement} for m in tables["Movimenti"]):
+                    raise ValidationError("Ci sono giroconti fra questi due conti. Scegli un altro conto a cui riassegnare i dati oppure modifica prima quei giroconti.")
                 target = next(account for account in tables["Conti"] if account["Nome"] == replacement)
                 target["Saldo_iniziale"] = (cents(target["Saldo_iniziale"]) + cents(row["Saldo_iniziale"])) / 100
                 for sheet in ("Movimenti", "Arbitraggio"):
                     for record in tables[sheet]:
                         if record["Conto"] == row["Nome"]:
                             record["Conto"] = replacement
+                        if sheet == "Movimenti" and record["Conto_destinazione"] == row["Nome"]:
+                            record["Conto_destinazione"] = replacement
             elif used or cents(row["Saldo_iniziale"]) != 0:
                 raise ValidationError("Questo conto contiene soldi o movimenti. Seleziona il conto a cui riassegnarli.")
             tables["Conti"] = [account for account in tables["Conti"] if account["ID"] != account_id]

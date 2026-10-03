@@ -24,7 +24,7 @@ from .utils import new_id
 SCHEMA = {
     "Movimenti": [
         "ID", "Data", "Tipo", "Importo", "Categoria", "Descrizione", "Fonte",
-        "Note", "Data_creazione", "Conto", "Arbitraggio_ID",
+        "Note", "Data_creazione", "Conto", "Arbitraggio_ID", "Conto_destinazione",
     ],
     "Arbitraggio": [
         "ID", "Data partita", "Numero pacco", "Squadra casa", "Squadra ospite",

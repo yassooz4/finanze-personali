@@ -20,13 +20,13 @@ def _run(operation, message):
 
 def _accounts(service, snapshot):
     st.subheader("I tuoi conti")
-    st.caption("Saldo attuale = saldo iniziale + entrate − uscite. Il saldo iniziale è ciò che avevi prima del primo movimento registrato.")
+    st.caption("Saldo attuale = saldo iniziale + accrediti − addebiti, giroconti inclusi. Il saldo iniziale è ciò che avevi prima del primo movimento registrato.")
     balances = stats.account_balances(snapshot)
     if not balances.empty:
         display = balances.copy()
         for column in ("Saldo iniziale", "Entrate", "Uscite", "Saldo"):
             display[column] = display[column].map(euro)
-        st.dataframe(display, hide_index=True, width="stretch")
+        st.dataframe(display.rename(columns={"Entrate": "Accrediti", "Uscite": "Addebiti"}), hide_index=True, width="stretch")
     else:
         st.info("Crea il primo conto per iniziare a registrare i movimenti.")
     with st.expander("+ Aggiungi un conto", expanded=not bool(snapshot.accounts)):
@@ -38,7 +38,9 @@ def _accounts(service, snapshot):
     if not snapshot.accounts:
         return
     records = {row["ID"]: row for row in snapshot.accounts}
-    selected = st.selectbox("Conto da gestire", [None] + list(records), format_func=lambda value: "Seleziona un conto" if value is None else records[value]["Nome"], key="manage_account")
+    st.subheader("Rinomina o gestisci un conto")
+    st.caption("Scegli il conto, scrivi il nuovo nome e premi Salva conto. La rinomina aggiorna anche movimenti, giroconti e partite.")
+    selected = st.selectbox("Conto da rinominare o gestire", [None] + list(records), format_func=lambda value: "Seleziona un conto" if value is None else records[value]["Nome"], key="manage_account")
     if not selected:
         return
     record = records[selected]
@@ -50,7 +52,7 @@ def _accounts(service, snapshot):
             _run(lambda: service.save_account(name=name, opening_balance=balance, account_id=selected, expected=record), "Conto aggiornato e saldi ricalcolati.")
     with st.expander("Elimina questo conto"):
         alternatives = [row["Nome"] for row in snapshot.accounts if row["ID"] != selected]
-        used = any(row["Conto"] == record["Nome"] for row in snapshot.tables["Movimenti"])
+        used = any(record["Nome"] in (row["Conto"], row["Conto_destinazione"]) for row in snapshot.tables["Movimenti"])
         needs_target = used or record["Saldo_iniziale"] != 0
         if needs_target:
             st.caption("I movimenti e il saldo iniziale verranno riassegnati al conto scelto. Il totale generale rimarrà uguale.")
@@ -119,7 +121,7 @@ def _archive(service, snapshot):
     st.download_button("Scarica finanze.xlsx", data=excel_export(snapshot.tables), file_name="finanze.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
     st.markdown("**Fogli presenti**")
     display = pd.DataFrame([
-        {"Foglio": "Movimenti", "Righe": len(snapshot.tables["Movimenti"]), "Contenuto": "Entrate e uscite, incluse quelle delle partite"},
+        {"Foglio": "Movimenti", "Righe": len(snapshot.tables["Movimenti"]), "Contenuto": "Entrate, uscite e giroconti, incluse le entrate delle partite"},
         {"Foglio": "Arbitraggio", "Righe": len(snapshot.tables["Arbitraggio"]), "Contenuto": "Partite e compensi con collegamento al movimento"},
         {"Foglio": "Categorie", "Righe": len(snapshot.categories), "Contenuto": "Categorie e tipi di movimento consentiti"},
         {"Foglio": "Conti", "Righe": len(snapshot.accounts), "Contenuto": "Conti personalizzati e saldi iniziali"},

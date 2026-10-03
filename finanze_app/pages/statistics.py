@@ -11,7 +11,7 @@ def render(service, snapshot):
     start, end = ui.period_filter(frame, key="statistics")
     selected_account = st.selectbox("Conto da analizzare", [None] + snapshot.account_names(), format_func=lambda value: value if value is not None else "Tutti i conti", key="statistics_account")
     if selected_account:
-        frame = frame[frame["Conto"] == selected_account]
+        frame = stats.account_movements(frame, selected_account)
     filtered = stats.date_filter(frame, start, end)
     income, expenses, net = stats.totals(filtered)
     ui.metrics([
@@ -23,7 +23,7 @@ def render(service, snapshot):
     with left:
         with st.container(border=True, key="panel_statistics_1"):
             st.subheader("Andamento del saldo")
-            st.caption("Il saldo include anche i movimenti precedenti al periodo scelto.")
+            st.caption("Il saldo include i giroconti e i movimenti precedenti al periodo scelto. I giroconti sono esclusi dalle statistiche di guadagni e spese.")
             ui.balance_chart(stats.balance_history(snapshot, start=start, end=end, account=selected_account), "stats_balance")
     with right:
         with st.container(border=True, key="panel_statistics_2"):
