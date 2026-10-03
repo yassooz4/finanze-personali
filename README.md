@@ -18,6 +18,7 @@ Le vecchie partite non vengono importate automaticamente. Il precedente ramo `da
 ## Funzioni
 
 - Dashboard, movimenti con aggiunta/modifica/eliminazione, statistiche, conti e categorie personalizzabili.
+- I moduli per creare e modificare movimenti, giroconti e partite si aprono su una schermata dedicata, con lo scorrimento normale della pagina anche da telefono. Torna indietro chiude il modulo senza salvare; dopo il salvataggio ritorni alla pagina di partenza.
 - **Giroconto** in + Nuovo movimento: scegli conto di partenza, conto di arrivo e importo. Lo spostamento aggiorna entrambi i saldi, compare una sola volta nello storico e non modifica il totale generale, le entrate o le spese. Puoi modificarlo ed eliminarlo come gli altri movimenti; il filtro conto lo trova su entrambi i conti.
 - **Rinomina conti** in Gestione > Conti: seleziona il conto, scrivi il nuovo nome e premi Salva conto. La rinomina aggiorna movimenti, entrambi i conti dei giroconti e partite, mantenendo gli ID e i saldi.
 - Arbitraggio: data (anche futura), numero pacco, squadre, compenso previsto, km, categoria della partita e note.

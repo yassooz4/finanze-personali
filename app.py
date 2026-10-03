@@ -39,22 +39,23 @@ def create_service():
 
 
 def main():
-    st.set_page_config(page_title="Finanze · v2.2", page_icon="💶", layout="wide", initial_sidebar_state="auto")
+    st.set_page_config(page_title="Finanze · v2.3", page_icon="💶", layout="wide", initial_sidebar_state="auto")
     ui.apply_style()
     require_login()
     with st.sidebar:
         st.markdown('<div class="brand"><div class="brand-mark">f</div><div><div class="brand-name">finanze</div><div class="brand-caption">il tuo spazio personale</div></div></div><div class="nav-caption">IL TUO SPAZIO</div>', unsafe_allow_html=True)
-        page = st.radio("Navigazione", list(PAGES), label_visibility="collapsed", key="page")
+        page = st.radio("Navigazione", list(PAGES), label_visibility="collapsed", key="page", on_change=ui.close_editor)
         st.divider()
         st.button("🔒 Esci", on_click=logout, width="stretch")
         if st.button("↻ Aggiorna dati", width="stretch"):
             st.rerun()
-        st.markdown('<div class="sidebar-note"><b>Un unico posto per i tuoi soldi</b>Conti, spese e partite.<br>Versione 2.2 · Google Sheets · Giroconti</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-note"><b>Un unico posto per i tuoi soldi</b>Conti, spese e partite.<br>Versione 2.3 · Google Sheets · Moduli su pagina</div>', unsafe_allow_html=True)
     ui.show_flash()
     try:
         service = create_service()
         snapshot = service.snapshot()
-        PAGES[page].render(service, snapshot)
+        if st.session_state.get("_editor", {}).get("kind") not in ("movement", "match"):
+            PAGES[page].render(service, snapshot)
         ui.render_editor(service)
     except FinanceError as exc:
         st.error(str(exc))

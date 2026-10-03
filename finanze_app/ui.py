@@ -26,11 +26,13 @@ def apply_style():
 
 
 def navigate(page):
+    close_editor()
     st.session_state["page"] = page
 
 
 def open_editor(kind, record=None):
     st.session_state["_editor"] = {"kind": kind, "record": record, "token": new_id("form")}
+    st.rerun()
 
 
 def close_editor():
@@ -41,10 +43,15 @@ def render_editor(service):
     editor = st.session_state.get("_editor")
     if not editor:
         return
-    if editor["kind"] == "movement":
-        movement_dialog(service, token=editor["token"], movement=editor["record"])
-    elif editor["kind"] == "match":
-        match_dialog(service, token=editor["token"], match=editor["record"])
+    if editor["kind"] in ("movement", "match"):
+        with st.container(border=True, key="panel_editor"):
+            st.button("← Torna indietro", on_click=close_editor, key="editor_back")
+            if editor["kind"] == "movement":
+                st.subheader("Modifica movimento" if editor["record"] else "Nuovo movimento")
+                movement_form(service, token=editor["token"], movement=editor["record"])
+            else:
+                st.subheader("Modifica partita" if editor["record"] else "Nuova partita")
+                match_form(service, token=editor["token"], match=editor["record"])
     elif editor["kind"] == "delete_movement":
         delete_dialog(service, record=editor["record"], kind="movement")
     elif editor["kind"] == "delete_match":
@@ -247,8 +254,7 @@ def _index(options, value):
     return options.index(value) if value in options else 0
 
 
-@st.dialog("Movimento", width="medium", on_dismiss=close_editor)
-def movement_dialog(service, *, token, movement=None):
+def movement_form(service, *, token, movement=None):
     snapshot = service.snapshot()
     accounts = snapshot.account_names()
     if not accounts:
@@ -291,8 +297,7 @@ def movement_dialog(service, *, token, movement=None):
                 flash("Giroconto salvato. Saldi dei conti aggiornati." if is_transfer else "Movimento salvato. Saldi e statistiche aggiornati.")
 
 
-@st.dialog("Partita di arbitraggio", width="medium", on_dismiss=close_editor)
-def match_dialog(service, *, token, match=None):
+def match_form(service, *, token, match=None):
     snapshot = service.snapshot()
     accounts = snapshot.account_names()
     original = match or {}

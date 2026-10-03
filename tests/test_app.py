@@ -292,3 +292,28 @@ def test_transfer_form_requires_a_second_account(app):
     widget(at.radio, "Tipo di movimento").set_value("Giroconto").run()
     assert not at.exception
     assert any("almeno due conti" in element.value for element in at.info)
+
+
+@pytest.mark.parametrize("page", ["💸 Movimenti", "⚽ Arbitraggio"])
+def test_creation_form_uses_page_and_back_cancels_without_saving(app, page):
+    at, service = app
+    at.sidebar.radio[0].set_value(page).run()
+    at.button(key="top_new").click().run()
+    assert not at.exception and not at.get("dialog")
+    assert not any(button.key == "top_new" for button in at.button)
+    widget(at.text_area, "Note (facoltative)").set_value("Non salvare questa bozza")
+    at.button(key="editor_back").click().run()
+    assert not at.exception
+    assert any(button.key == "top_new" for button in at.button)
+    assert service.snapshot().movements.empty and service.snapshot().matches.empty
+
+
+def test_sidebar_navigation_leaves_full_page_form(app):
+    at, service = app
+    at.button(key="top_new").click().run()
+    assert not at.exception and any(button.key == "editor_back" for button in at.button)
+    at.sidebar.radio[0].set_value("⚽ Arbitraggio").run()
+    assert not at.exception
+    assert any(button.label == "+ Nuova partita" for button in at.button)
+    assert not any(button.key == "editor_back" for button in at.button)
+    assert service.snapshot().movements.empty
