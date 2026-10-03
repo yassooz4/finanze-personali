@@ -83,6 +83,76 @@ def service(remote):
     return FinanceService(None, store=GoogleSheetsStore(remote))
 
 
+def transfer(s, **changes):
+    args = dict(kind='Giroconto', amount=30, date=today(), description='', category='', source='', account='Conto personale', destination_account='Contanti')
+    args.update(changes)
+    return s.save_movement(**args)
+
+
+def test_existing_sheet_migrates_without_losing_movements_matches_or_custom_data():
+    remote = RemoteSheet()
+    s = service(remote)
+    match(s, status='Ricevuto', received_date=date(2026,9,30), account='Contanti', category='Arbitraggio')
+    before = s.snapshot()
+    headers = remote.grids['Movimenti'][0]
+    index = headers.index('Conto_destinazione')
+    for row in remote.grids['Movimenti']:
+        if len(row) > index:
+            row.pop(index)
+    migrated = service(remote).snapshot()
+    assert migrated.tables == before.tables
+    assert 'Conto_destinazione' in remote.grids['Movimenti'][0]
+    assert total_balance(migrated) == 45
+    assert remote.grids['Privato'] == [['conservare']]
+    mid = transfer(service(remote), account='Contanti', destination_account='Conto personale', amount=20)
+    reloaded = service(remote).snapshot()
+    assert len(reloaded.movements) == 2 and len(reloaded.matches) == 1
+    assert mid in reloaded.movements['ID'].tolist()
+    assert total_balance(reloaded) == 45
+
+
+def test_transfer_restart_edit_rename_and_delete_preserve_balances():
+    from finanze_app.analytics import account_balances, totals
+    remote = RemoteSheet()
+    s = service(remote)
+    source, target = s.snapshot().accounts
+    s.save_account(name=source['Nome'], opening_balance=100, account_id=source['ID'], expected=source)
+    mid = transfer(s)
+    row = service(remote).snapshot().tables['Movimenti'][0]
+    transfer(service(remote), movement_id=mid, expected=row, amount=40)
+    restarted = service(remote)
+    current = restarted.snapshot()
+    target = next(a for a in current.accounts if a['ID'] == target['ID'])
+    restarted.save_account(name='Portafoglio', opening_balance=target['Saldo_iniziale'], account_id=target['ID'], expected=target)
+    current = service(remote).snapshot()
+    record = current.tables['Movimenti'][0]
+    assert record['ID'] == mid and record['Conto_destinazione'] == 'Portafoglio'
+    assert len(current.movements) == 1 and total_balance(current) == 100
+    assert account_balances(current).set_index('Conto')['Saldo'].to_dict() == {'Conto personale': 60, 'Portafoglio': 40}
+    assert totals(current.movements) == (0, 0, 0)
+    service(remote).delete_movement(mid, expected=record)
+    current = service(remote).snapshot()
+    assert current.movements.empty and total_balance(current) == 100
+    assert account_balances(current).set_index('Conto')['Saldo'].to_dict() == {'Conto personale': 100, 'Portafoglio': 0}
+
+
+@pytest.mark.parametrize('failure', ['before', 'after'])
+def test_transfer_timeout_preserves_atomicity(failure):
+    remote = RemoteSheet()
+    s = service(remote)
+    s.snapshot()
+    remote.fail = failure
+    if failure == 'before':
+        with pytest.raises(StorageError, match='non confermato'):
+            transfer(s)
+        assert service(remote).snapshot().movements.empty
+    else:
+        mid = transfer(s)
+        current = service(remote).snapshot()
+        assert len(current.movements) == 1 and current.tables['Movimenti'][0]['ID'] == mid
+    assert total_balance(service(remote).snapshot()) == 0
+
+
 def match(s, **changes):
     args = dict(date=date(2026,9,30), package='0012', home='Casa', away='Ospiti', fee=45, notes='', km=27.5, match_category='Under 17')
     args.update(changes)

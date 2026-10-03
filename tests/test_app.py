@@ -224,3 +224,71 @@ def test_future_match_can_be_created_reloaded_and_rescheduled(app):
     updated = service.snapshot().tables["Arbitraggio"][0]
     assert updated["ID"] == record["ID"] and updated["Data partita"] == next_week
     assert service.snapshot().movements.empty and total_balance(service.snapshot()) == 0
+
+
+def test_transfer_form_filters_edit_and_delete_update_both_accounts(app):
+    at, service = app
+    source = service.snapshot().accounts[0]
+    service.save_account(name=source["Nome"], opening_balance=100, account_id=source["ID"])
+    at.sidebar.radio[0].set_value("💸 Movimenti").run()
+    at.button(key="top_new").click().run()
+    widget(at.radio, "Tipo di movimento").set_value("Giroconto").run()
+    widget(at.number_input, "Importo (€)").set_value(30)
+    widget(at.selectbox, "Conto di partenza").set_value("Conto personale")
+    widget(at.selectbox, "Conto di arrivo").set_value("Contanti")
+    widget(at.button, "Salva giroconto").click().run()
+    assert not at.exception and not at.error
+    assert total_balance(service.snapshot()) == 100
+    record = service.snapshot().tables["Movimenti"][0]
+    assert record["Tipo"] == "Giroconto" and record["Conto_destinazione"] == "Contanti"
+    at.selectbox(key="movement_kind_filter").set_value("Giroconto").run()
+    at.selectbox(key="movement_account_filter").set_value("Contanti").run()
+    assert not at.exception and len(at.dataframe[0].value) == 1
+    assert at.dataframe[0].value.iloc[0]["Conto"] == "Conto personale → Contanti"
+    assert at.dataframe[0].value.iloc[0]["Importo"] == "30,00 €"
+    at.selectbox(key="selected_movement").set_value(record["ID"]).run()
+    widget(at.button, "Modifica movimento").click().run()
+    assert widget(at.radio, "Tipo di movimento").value == "Giroconto"
+    widget(at.number_input, "Importo (€)").set_value(40)
+    widget(at.button, "Salva modifiche").click().run()
+    assert not at.exception and not at.error
+    assert len(service.snapshot().movements) == 1 and total_balance(service.snapshot()) == 100
+    at.sidebar.radio[0].set_value("📊 Statistiche").run()
+    at.selectbox(key="statistics_account").set_value("Contanti").run()
+    assert not at.exception
+    at.sidebar.radio[0].set_value("🏠 Dashboard").run()
+    assert not at.exception
+    assert any("Conto personale → Contanti" in element.value for element in at.markdown)
+    at.sidebar.radio[0].set_value("💸 Movimenti").run()
+    at.selectbox(key="selected_movement").set_value(record["ID"]).run()
+    widget(at.button, "Elimina movimento").click().run()
+    widget(at.checkbox, "Confermo l'eliminazione").check().run()
+    widget(at.button, "Elimina definitivamente").click().run()
+    assert not at.exception and service.snapshot().movements.empty
+    assert total_balance(service.snapshot()) == 100
+
+
+def test_account_rename_through_settings_updates_transfer_destination(app):
+    at, service = app
+    service.save_movement(kind="Giroconto", amount=20, date=today(), description="", category="", source="", account="Conto personale", destination_account="Contanti")
+    account = service.snapshot().accounts[1]
+    at.sidebar.radio[0].set_value("⚙️ Gestione").run()
+    at.selectbox(key="manage_account").set_value(account["ID"]).run()
+    widget(at.text_input, "Rinomina conto").set_value("Portafoglio")
+    widget(at.button, "Salva conto").click().run()
+    assert not at.exception and not at.error
+    assert service.snapshot().tables["Movimenti"][0]["Conto_destinazione"] == "Portafoglio"
+    at.sidebar.radio[0].set_value("💸 Movimenti").run()
+    at.button(key="top_new").click().run()
+    widget(at.radio, "Tipo di movimento").set_value("Giroconto").run()
+    assert "Portafoglio" in widget(at.selectbox, "Conto di arrivo").options
+
+
+def test_transfer_form_requires_a_second_account(app):
+    at, service = app
+    service.delete_account(service.snapshot().accounts[1]["ID"])
+    at.sidebar.radio[0].set_value("💸 Movimenti").run()
+    at.button(key="top_new").click().run()
+    widget(at.radio, "Tipo di movimento").set_value("Giroconto").run()
+    assert not at.exception
+    assert any("almeno due conti" in element.value for element in at.info)

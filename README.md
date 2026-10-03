@@ -18,6 +18,8 @@ Le vecchie partite non vengono importate automaticamente. Il precedente ramo `da
 ## Funzioni
 
 - Dashboard, movimenti con aggiunta/modifica/eliminazione, statistiche, conti e categorie personalizzabili.
+- **Giroconto** in + Nuovo movimento: scegli conto di partenza, conto di arrivo e importo. Lo spostamento aggiorna entrambi i saldi, compare una sola volta nello storico e non modifica il totale generale, le entrate o le spese. Puoi modificarlo ed eliminarlo come gli altri movimenti; il filtro conto lo trova su entrambi i conti.
+- **Rinomina conti** in Gestione > Conti: seleziona il conto, scrivi il nuovo nome e premi Salva conto. La rinomina aggiorna movimenti, entrambi i conti dei giroconti e partite, mantenendo gli ID e i saldi.
 - Arbitraggio: data (anche futura), numero pacco, squadre, compenso previsto, km, categoria della partita e note.
 - Una partita nuova è **Da ricevere** e non aumenta il saldo. Se diventa **Ricevuto**, data incasso e conto sono richiesti e viene creata una sola entrata collegata. Le correzioni aggiornano la stessa entrata; il ritorno a Da ricevere la rimuove.
 - Storico con stato, filtri, importi ricevuti e ancora da ricevere. Menu dei pagamenti nello storico.
@@ -27,6 +29,8 @@ Le vecchie partite non vengono importate automaticamente. Il precedente ramo `da
 ## Come vengono salvati i dati
 
 Ogni lettura acquisisce i dati dal foglio e li elabora in Pandas. Viene memorizzata solo la connessione Google, mai una copia dei dati finanziari. I salvataggi aggiornano le schede interessate in un'unica richiesta Google atomica: partita e movimento vengono scritti insieme. Le cancellazioni rimuovono anche le righe residue; gli ID non cambiano nelle modifiche.
+
+I giroconti sono righe di tipo `Giroconto` nella scheda `Movimenti`: `Conto` è la partenza e `Conto_destinazione` è l'arrivo. L'app aggiunge automaticamente questa colonna ai fogli esistenti, preservando le righe precedenti. Nella tabella dei conti, Accrediti e Addebiti includono gli spostamenti interni; le statistiche di guadagni e spese li escludono. Eliminare un conto richiede di riassegnare anche i giroconti; non è consentito unire i due conti di un giroconto senza prima modificarlo.
 
 Le sessioni nella stessa istanza sono serializzate e prima del salvataggio viene verificato che il foglio non sia cambiato. Google Sheets non offre un blocco tra tutte le applicazioni: evita di modificare il foglio manualmente nello stesso istante di un salvataggio dall'app. Sono preservate schede aggiuntive e colonne personalizzate. Non rinominare le schede o le intestazioni dell'app e non cambiare gli ID; usa valori semplici nelle colonne finanziarie.
 

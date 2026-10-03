@@ -59,11 +59,13 @@ h3 { font-size:1.15rem !important; font-weight:650 !important; padding-top:.1rem
 .recent:last-child { border-bottom:0; }
 .recent-icon { flex:0 0 37px; height:37px; display:grid; place-items:center; border-radius:10px; background:#edf7f2; color:#0f766e; }
 .recent-icon.out { background:#fff1ed; color:#c47761; }
+.recent-icon.transfer { background:#f0f3fa; color:#243f59; }
 .recent-detail { min-width:0; flex:1; }
 .recent-title { color:#253b52; font-size:.86rem; font-weight:550; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .recent-meta { font-size:.72rem; color:#8d99aa; margin-top:3px; }
 .recent-amount { color:#0f766e; font-size:.91rem; font-weight:650; white-space:nowrap; }
 .recent-amount.out { color:#c17660; }
+.recent-amount.transfer { color:#243f59; }
 .table-note { color:#8997a8; font-size:.74rem; margin-top:8px; }
 .st-key-top_action { padding-top:10px; }
 @media(max-width:900px) { .block-container { padding:3.8rem 1.25rem 2rem; } .metric-card { padding:18px; } }

@@ -27,12 +27,22 @@ def totals(frame):
     return income / 100, expenses / 100, (income - expenses) / 100
 
 
+def account_movements(frame, account):
+    return frame[(frame["Conto"] == account) | (frame["Conto_destinazione"] == account)].copy()
+
+
 def account_balances(snapshot: Snapshot):
     frame = snapshot.movements
     rows = []
     for account in snapshot.accounts:
-        income, expenses, net = totals(frame[frame["Conto"] == account["Nome"]])
-        balance = (cents(account["Saldo_iniziale"]) + cents(net)) / 100
+        own = account_movements(frame, account["Nome"])
+        income, expenses, _ = totals(own)
+        transfers = own[own["Tipo"] == "Giroconto"]
+        incoming = sum(cents(v) for v in transfers.loc[transfers["Conto_destinazione"] == account["Nome"], "Importo"])
+        outgoing = sum(cents(v) for v in transfers.loc[transfers["Conto"] == account["Nome"], "Importo"])
+        income = (cents(income) + incoming) / 100
+        expenses = (cents(expenses) + outgoing) / 100
+        balance = (cents(account["Saldo_iniziale"]) + cents(income) - cents(expenses)) / 100
         rows.append({"Conto": account["Nome"], "Saldo iniziale": account["Saldo_iniziale"], "Entrate": income, "Uscite": expenses, "Saldo": balance})
     return pd.DataFrame(rows, columns=["Conto", "Saldo iniziale", "Entrate", "Uscite", "Saldo"])
 
@@ -42,9 +52,9 @@ def total_balance(snapshot: Snapshot):
 
 
 def monthly_flows(frame, start=None, end=None):
-    if frame.empty:
+    work = frame[frame["Tipo"] != "Giroconto"].copy()
+    if work.empty:
         return pd.DataFrame(columns=["Mese", "Entrate", "Uscite", "Differenza"])
-    work = frame.copy()
     work["Mese"] = work["Data"].dt.to_period("M").dt.to_timestamp()
     work["Centesimi"] = work["Importo"].map(cents)
     pivot = work.pivot_table(index="Mese", columns="Tipo", values="Centesimi", aggfunc="sum", fill_value=0)
@@ -76,13 +86,21 @@ def balance_history(snapshot: Snapshot, *, start=None, end=None, account=None):
     frame = snapshot.movements
     accounts = snapshot.accounts
     if account:
-        frame = frame[frame["Conto"] == account]
+        frame = account_movements(frame, account)
         accounts = [row for row in accounts if row["Nome"] == account]
     initial = sum(cents(row["Saldo_iniziale"]) for row in accounts)
     if frame.empty:
         return pd.DataFrame({"Data": [pd.Timestamp(start or today()), pd.Timestamp(end or today())], "Saldo": [initial / 100, initial / 100]})
     work = frame.copy()
-    work["Variazione"] = work.apply(lambda row: cents(row["Importo"]) * (1 if row["Tipo"] == "Entrata" else -1), axis=1)
+    def variation(row):
+        if row["Tipo"] == "Giroconto":
+            if not account:
+                return 0
+            sign = 1 if row["Conto_destinazione"] == account else -1
+        else:
+            sign = 1 if row["Tipo"] == "Entrata" else -1
+        return cents(row["Importo"]) * sign
+    work["Variazione"] = work.apply(variation, axis=1)
     daily = work.groupby("Data")["Variazione"].sum().sort_index()
     # Always accumulate the full history before restricting the chart period.
     first = min(daily.index.min(), pd.Timestamp(start or daily.index.min()))

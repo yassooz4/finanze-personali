@@ -10,6 +10,7 @@ import streamlit as st
 
 from .analytics import MONTHS, account_balances
 from .errors import FinanceError
+from .service import KINDS
 from .utils import euro, new_id, today
 
 
@@ -190,16 +191,18 @@ def recent_movements(frame):
     lines = []
     for _, row in frame.sort_values("Data_creazione", ascending=False).head(6).iterrows():
         outgoing = row["Tipo"] == "Uscita"
-        style = "out" if outgoing else ""
+        is_transfer = row["Tipo"] == "Giroconto"
+        style = "transfer" if is_transfer else ("out" if outgoing else "")
         amount = -row["Importo"] if outgoing else row["Importo"]
-        icon = "↗" if outgoing else "↙"
+        icon = "⇄" if is_transfer else ("↗" if outgoing else "↙")
+        account_label = row["Conto"] + (f" → {row['Conto_destinazione']}" if is_transfer else "")
         if row["Arbitraggio_ID"]:
             icon = "⚽"
         lines.append(
             f'<div class="recent"><div class="recent-icon {style}">{icon}</div><div class="recent-detail">'
             f'<div class="recent-title">{escape(row["Descrizione"])}</div><div class="recent-meta">'
-            f'{row["Data"]:%d/%m/%Y} · {escape(row["Categoria"] or "Senza categoria")} · {escape(row["Conto"])}</div></div>'
-            f'<div class="recent-amount {style}">{euro(amount, signed=True)}</div></div>'
+            f'{row["Data"]:%d/%m/%Y} · {escape("Giroconto" if is_transfer else (row["Categoria"] or "Senza categoria"))} · {escape(account_label)}</div></div>'
+            f'<div class="recent-amount {style}">{euro(amount, signed=not is_transfer)}</div></div>'
         )
     st.markdown("".join(lines), unsafe_allow_html=True)
 
@@ -232,8 +235,10 @@ def period_filter(frame, *, key, column="Data", default="Tutto"):
 
 def movement_table(frame, key):
     display = frame.sort_values(["Data", "Data_creazione"], ascending=False).copy()
-    display["Importo"] = display.apply(lambda row: euro(-row["Importo"] if row["Tipo"] == "Uscita" else row["Importo"], signed=True), axis=1) if not display.empty else pd.Series(dtype=str)
-    display["Origine"] = display["Arbitraggio_ID"].apply(lambda value: "⚽ Partita" if value else "Manuale")
+    display["Importo"] = display.apply(lambda row: euro(-row["Importo"] if row["Tipo"] == "Uscita" else row["Importo"], signed=row["Tipo"] != "Giroconto"), axis=1) if not display.empty else pd.Series(dtype=str)
+    display["Origine"] = display.apply(lambda row: "⚽ Partita" if row["Arbitraggio_ID"] else ("⇄ Giroconto" if row["Tipo"] == "Giroconto" else "Manuale"), axis=1) if not display.empty else pd.Series(dtype=str)
+    if not display.empty:
+        display["Conto"] = display.apply(lambda row: f"{row['Conto']} → {row['Conto_destinazione']}" if row["Tipo"] == "Giroconto" else row["Conto"], axis=1)
     display = display[["Data", "Tipo", "Importo", "Categoria", "Descrizione", "Conto", "Fonte", "Note", "Origine"]]
     st.dataframe(display, hide_index=True, width="stretch", column_config={"Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY")}, key=key)
 
@@ -252,27 +257,38 @@ def movement_dialog(service, *, token, movement=None):
     original = movement or {}
     if movement:
         st.caption("Modifica il movimento e salva: il saldo si aggiornerà automaticamente.")
-    kind = st.radio("Tipo di movimento", ["Entrata", "Uscita"], index=_index(["Entrata", "Uscita"], original.get("Tipo", "Uscita")), horizontal=True, key=f"{token}_kind")
-    categories = [""] + snapshot.category_names(kind)
+    kind = st.radio("Tipo di movimento", KINDS, index=_index(KINDS, original.get("Tipo", "Uscita")), horizontal=True, key=f"{token}_kind")
+    is_transfer = kind == "Giroconto"
+    if is_transfer and len(accounts) < 2:
+        st.info("Per un giroconto servono almeno due conti. Aggiungi un altro conto in Gestione → Conti.")
+        return
+    categories = [""] + snapshot.category_names(kind) if not is_transfer else []
     with st.form(f"{token}_form"):
         col1, col2 = st.columns(2)
         amount = col1.number_input("Importo (€)", min_value=0.0, max_value=999999999999.99, value=float(original.get("Importo", 0.0)), step=.01, format="%.2f", key=f"{token}_amount")
         date_value = col2.date_input("Data", value=original.get("Data", today()), max_value=today(), min_value=date(1900, 1, 1), format="DD/MM/YYYY", key=f"{token}_date")
-        description = st.text_input("Motivo / descrizione", value=original.get("Descrizione", ""), max_chars=2000, placeholder="Es. spesa al supermercato", key=f"{token}_description")
+        description = st.text_input("Descrizione (facoltativa)" if is_transfer else "Motivo / descrizione", value=original.get("Descrizione", ""), max_chars=2000, placeholder="Es. prelievo di contanti" if is_transfer else "Es. spesa al supermercato", key=f"{token}_description")
         col1, col2 = st.columns(2)
-        category = col1.selectbox("Categoria", categories, index=_index(categories, original.get("Categoria", "")), format_func=lambda value: value or "Senza categoria", key=f"{token}_category")
-        account = col2.selectbox("Conto", accounts, index=_index(accounts, original.get("Conto")), key=f"{token}_account")
-        source = st.text_input("Provenienza / destinazione", value=original.get("Fonte", ""), max_chars=2000, placeholder="Es. datore di lavoro, negozio, persona", key=f"{token}_source")
+        destination_account = ""
+        if is_transfer:
+            account = col1.selectbox("Conto di partenza", accounts, index=_index(accounts, original.get("Conto")), key=f"{token}_account")
+            default_destination = original.get("Conto_destinazione") or next(name for name in accounts if name != account)
+            destination_account = col2.selectbox("Conto di arrivo", accounts, index=_index(accounts, default_destination), key=f"{token}_destination_account")
+            category, source = "", "Giroconto"
+        else:
+            category = col1.selectbox("Categoria", categories, index=_index(categories, original.get("Categoria", "")), format_func=lambda value: value or "Senza categoria", key=f"{token}_category")
+            account = col2.selectbox("Conto", accounts, index=_index(accounts, original.get("Conto")), key=f"{token}_account")
+            source = st.text_input("Provenienza / destinazione", value=original.get("Fonte", ""), max_chars=2000, placeholder="Es. datore di lavoro, negozio, persona", key=f"{token}_source")
         notes = st.text_area("Note (facoltative)", value=original.get("Note", ""), max_chars=5000, height=80, key=f"{token}_notes")
-        st.caption("Le categorie si personalizzano in Gestione. Per registrare una partita usa Arbitraggio.")
-        submitted = st.form_submit_button("Salva modifiche" if movement else "Salva movimento", type="primary", width="stretch")
+        st.caption("Il giroconto sposta soldi tra i tuoi conti: il totale generale e le statistiche di entrate e uscite rimangono invariati." if is_transfer else "Le categorie si personalizzano in Gestione. Per registrare una partita usa Arbitraggio.")
+        submitted = st.form_submit_button("Salva modifiche" if movement else ("Salva giroconto" if is_transfer else "Salva movimento"), type="primary", width="stretch")
         if submitted:
             try:
-                service.save_movement(kind=kind, amount=amount, date=date_value, description=description, category=category, source=source, account=account, notes=notes, movement_id=original.get("ID"), expected=movement)
+                service.save_movement(kind=kind, amount=amount, date=date_value, description=description, category=category, source=source, account=account, notes=notes, movement_id=original.get("ID"), expected=movement, destination_account=destination_account)
             except FinanceError as exc:
                 st.error(str(exc))
             else:
-                flash("Movimento salvato. Saldi e statistiche aggiornati.")
+                flash("Giroconto salvato. Saldi dei conti aggiornati." if is_transfer else "Movimento salvato. Saldi e statistiche aggiornati.")
 
 
 @st.dialog("Partita di arbitraggio", width="medium", on_dismiss=close_editor)
@@ -323,6 +339,9 @@ def delete_dialog(service, *, record, kind):
     st.write(description)
     if is_match or record.get("Arbitraggio_ID"):
         st.warning("Verranno eliminate la partita e la sua entrata collegata. Il saldo verrà ricalcolato.")
+    elif record["Tipo"] == "Giroconto":
+        st.write(f"{record['Conto']} → {record['Conto_destinazione']}")
+        st.warning("Verrà eliminato il giroconto e saranno ricalcolati i saldi di entrambi i conti.")
     else:
         st.warning("Il movimento verrà eliminato e il saldo ricalcolato.")
     confirmed = st.checkbox("Confermo l'eliminazione", key=f"delete_confirm_{record['ID']}")

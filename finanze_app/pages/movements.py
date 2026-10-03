@@ -2,29 +2,30 @@ import streamlit as st
 
 from .. import analytics as stats
 from .. import ui
+from ..service import KINDS
 from ..utils import euro
 
 
 def render(service, snapshot):
-    ui.page_header("Movimenti", "Registra, cerca e aggiorna le tue entrate e uscite.", service)
+    ui.page_header("Movimenti", "Registra, cerca e aggiorna entrate, uscite e giroconti.", service)
     frame = snapshot.movements
     start, end = ui.period_filter(frame, key="movements")
     filtered = stats.date_filter(frame, start, end)
     with st.container(border=True, key="panel_movements_1"):
         col1, col2, col3, col4 = st.columns([2, 1, 1, 1])
         search = col1.text_input("Cerca", placeholder="Descrizione, provenienza o note…", key="movement_search")
-        kind = col2.selectbox("Tipo", [None, "Entrata", "Uscita"], format_func=lambda value: value or "Tutti", key="movement_kind_filter")
+        kind = col2.selectbox("Tipo", [None] + list(KINDS), format_func=lambda value: value or "Tutti", key="movement_kind_filter")
         account = col3.selectbox("Conto", [None] + snapshot.account_names(), format_func=lambda value: value if value is not None else "Tutti", key="movement_account_filter")
         category_options = [None, ""] + sorted([row["Nome"] for row in snapshot.categories], key=str.casefold)
         category = col4.selectbox("Categoria", category_options, format_func=lambda value: "Tutte" if value is None else (value or "Senza categoria"), key="movement_category_filter")
     if kind is not None:
         filtered = filtered[filtered["Tipo"] == kind]
     if account is not None:
-        filtered = filtered[filtered["Conto"] == account]
+        filtered = stats.account_movements(filtered, account)
     if category is not None:
         filtered = filtered[filtered["Categoria"] == category]
     if search.strip() and not filtered.empty:
-        text = filtered[["Descrizione", "Fonte", "Note", "Categoria"]].fillna("").agg(" ".join, axis=1)
+        text = filtered[["Descrizione", "Fonte", "Note", "Categoria", "Conto", "Conto_destinazione"]].fillna("").agg(" ".join, axis=1)
         filtered = filtered[text.str.contains(search.strip(), case=False, regex=False)]
     income, expenses, net = stats.totals(filtered)
     ui.metrics([
@@ -38,7 +39,7 @@ def render(service, snapshot):
             ui.empty("Nessun movimento corrisponde ai filtri.")
         else:
             ui.movement_table(filtered, "all_movements")
-            st.caption("Le entrate ⚽ provengono dalle partite e sono già comprese nei saldi.")
+            st.caption("Le entrate ⚽ provengono dalle partite. I giroconti ⇄ spostano soldi tra i conti e non sono conteggiati come guadagni o spese.")
     if filtered.empty:
         return
     with st.expander("Modifica o elimina un movimento", expanded=True):
@@ -48,7 +49,8 @@ def render(service, snapshot):
             if value is None:
                 return "Seleziona un movimento"
             row = records[value]
-            return f"{row['Data']:%d/%m/%Y} · {row['Descrizione']} · {euro(row['Importo'])}"
+            route = f" · {row['Conto']} → {row['Conto_destinazione']}" if row["Tipo"] == "Giroconto" else ""
+            return f"{row['Data']:%d/%m/%Y} · {row['Descrizione']}{route} · {euro(row['Importo'])}"
         selected = st.selectbox("Movimento", [None] + ids, format_func=label, key="selected_movement")
         if selected:
             record = records[selected]
