@@ -1,3 +1,4 @@
+from datetime import timedelta
 from pathlib import Path
 
 import pytest
@@ -191,3 +192,35 @@ def test_invalid_excel_shows_message_without_resetting_data(app):
     assert not at.exception
     assert at.error
     assert service.store.path.read_bytes() == b"Archivio non leggibile"
+
+
+def test_future_match_can_be_created_reloaded_and_rescheduled(app):
+    at, service = app
+    tomorrow = today() + timedelta(days=1)
+    at.sidebar.radio[0].set_value("⚽ Arbitraggio").run()
+    at.button(key="top_new").click().run()
+    assert widget(at.selectbox, "Stato pagamento").value == "Da ricevere"
+    assert widget(at.date_input, "Data della partita").max > tomorrow
+    widget(at.date_input, "Data della partita").set_value(tomorrow)
+    widget(at.text_input, "Numero pacco").set_value("0018")
+    widget(at.text_input, "Squadra di casa").set_value("Casa")
+    widget(at.text_input, "Squadra ospite").set_value("Ospiti")
+    widget(at.number_input, "Compenso previsto (€)").set_value(50)
+    widget(at.button, "Salva partita").click().run()
+    assert not at.exception and not at.error
+    record = service.snapshot().tables["Arbitraggio"][0]
+    assert record["Data partita"] == tomorrow
+    assert record["Stato"] == "Da ricevere"
+    assert service.snapshot().movements.empty and total_balance(service.snapshot()) == 0
+    at.run()
+    assert not at.exception and not at.error
+    at.selectbox(key="selected_match").set_value(record["ID"]).run()
+    widget(at.button, "Modifica partita").click().run()
+    assert widget(at.date_input, "Data della partita").value == tomorrow
+    next_week = today() + timedelta(days=7)
+    widget(at.date_input, "Data della partita").set_value(next_week)
+    widget(at.button, "Salva modifiche").click().run()
+    assert not at.exception and not at.error
+    updated = service.snapshot().tables["Arbitraggio"][0]
+    assert updated["ID"] == record["ID"] and updated["Data partita"] == next_week
+    assert service.snapshot().movements.empty and total_balance(service.snapshot()) == 0

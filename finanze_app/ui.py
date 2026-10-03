@@ -282,12 +282,12 @@ def match_dialog(service, *, token, match=None):
     original = match or {}
     categories = [""] + snapshot.category_names("Entrata")
     default_category = original.get("Categoria", "Arbitraggio" if "Arbitraggio" in categories else "")
-    st.caption("Il compenso entra nel saldo solo quando il pagamento è Ricevuto.")
+    st.caption("Puoi registrare anche partite future. Il compenso entra nel saldo solo quando il pagamento è Ricevuto.")
     statuses = ["Da ricevere", "Ricevuto"]
     status = st.selectbox("Stato pagamento", statuses, index=_index(statuses, original.get("Stato", "Da ricevere")), key=f"{token}_status")
     with st.form(f"{token}_form"):
         col1, col2 = st.columns(2)
-        date_value = col1.date_input("Data della partita", value=original.get("Data partita", today()), min_value=date(1900, 1, 1), max_value=today(), format="DD/MM/YYYY", key=f"{token}_date")
+        date_value = col1.date_input("Data della partita", value=original.get("Data partita", today()), min_value=date(1900, 1, 1), format="DD/MM/YYYY", key=f"{token}_date")
         package = col2.text_input("Numero pacco", value=original.get("Numero pacco", ""), max_chars=80, placeholder="Es. 0012", key=f"{token}_package")
         col1, col2 = st.columns(2)
         home = col1.text_input("Squadra di casa", value=original.get("Squadra casa", ""), max_chars=120, key=f"{token}_home")

@@ -123,7 +123,7 @@ class FinanceService:
                             raise ValidationError("Data_creazione deve essere una data e ora Excel.")
                         row["Data_creazione"] = created
                     elif sheet == "Arbitraggio":
-                        row["Data partita"] = as_date(row.get("Data partita"), past_only=True)
+                        row["Data partita"] = as_date(row.get("Data partita"))
                         row["Compenso"] = money(row.get("Compenso"), nonnegative=True)
                         row["Km"] = money(row.get("Km") or 0, nonnegative=True)
                         row["Categoria partita"] = text(row.get("Categoria partita"), label="Categoria partita", limit=120)
@@ -275,7 +275,7 @@ class FinanceService:
                 row = self._get(tables, "Arbitraggio", match_id)
                 self._expected(row, expected)
             values = {
-                "Data partita": as_date(date, past_only=True),
+                "Data partita": as_date(date),
                 "Numero pacco": text(package, label="Il numero pacco", required=True, limit=80),
                 "Squadra casa": text(home, label="La squadra di casa", required=True, limit=120),
                 "Squadra ospite": text(away, label="La squadra ospite", required=True, limit=120),

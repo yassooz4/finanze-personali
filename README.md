@@ -18,7 +18,7 @@ Le vecchie partite non vengono importate automaticamente. Il precedente ramo `da
 ## Funzioni
 
 - Dashboard, movimenti con aggiunta/modifica/eliminazione, statistiche, conti e categorie personalizzabili.
-- Arbitraggio: data, numero pacco, squadre, compenso previsto, km, categoria della partita e note.
+- Arbitraggio: data (anche futura), numero pacco, squadre, compenso previsto, km, categoria della partita e note.
 - Una partita nuova è **Da ricevere** e non aumenta il saldo. Se diventa **Ricevuto**, data incasso e conto sono richiesti e viene creata una sola entrata collegata. Le correzioni aggiornano la stessa entrata; il ritorno a Da ricevere la rimuove.
 - Storico con stato, filtri, importi ricevuti e ancora da ricevere. Menu dei pagamenti nello storico.
 - Login protetto dalla password nei Secrets e pulsante Esci.

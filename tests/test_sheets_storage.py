@@ -1,6 +1,6 @@
 from copy import deepcopy
 from io import BytesIO
-from datetime import date
+from datetime import date, timedelta
 
 import pytest
 from requests.exceptions import Timeout, ConnectionError
@@ -8,10 +8,11 @@ from openpyxl import load_workbook
 
 from finanze_app.sheets_storage import GoogleSheetsStore
 from finanze_app.service import FinanceService
-from finanze_app.errors import StorageError, ConflictError
+from finanze_app.errors import StorageError, ConflictError, ValidationError
 from finanze_app.analytics import total_balance
 from finanze_app.export import excel_export
 from finanze_app.storage import SCHEMA
+from finanze_app.utils import today
 
 
 class RemoteSheet:
@@ -113,6 +114,41 @@ def test_new_archive_restart_and_payment_roundtrip():
     s.delete_match(mid)
     assert service(remote).snapshot().matches.empty
     assert remote.grids['Privato'] == [['conservare']]
+
+
+def test_future_match_persists_without_credit_and_is_paid_after_match(monkeypatch):
+    remote = RemoteSheet()
+    tomorrow = today() + timedelta(days=1)
+    mid = match(service(remote), date=tomorrow)
+    restarted = service(remote)
+    snap = restarted.snapshot()
+    row = snap.tables['Arbitraggio'][0]
+    assert row['ID'] == mid and row['Data partita'] == tomorrow
+    assert row['Stato'] == 'Da ricevere'
+    assert snap.movements.empty and total_balance(snap) == 0
+    later = tomorrow + timedelta(days=7)
+    match(restarted, date=later, match_id=mid, expected=row)
+    row = service(remote).snapshot().tables['Arbitraggio'][0]
+    assert row['Data partita'] == later
+    before = deepcopy(remote.grids)
+    for payment_date in (today(), later):
+        with pytest.raises(ValidationError):
+            service(remote).update_match_payments([{
+                'ID': mid, 'Stato': 'Ricevuto', 'Data incasso': payment_date,
+                'Conto': 'Contanti', 'expected': row,
+            }])
+        assert remote.grids == before
+    monkeypatch.setattr('finanze_app.utils.today', lambda: later)
+    service(remote).update_match_payments([{
+        'ID': mid, 'Stato': 'Ricevuto', 'Data incasso': later,
+        'Conto': 'Contanti', 'expected': row,
+    }])
+    snap = service(remote).snapshot()
+    assert len(snap.matches) == 1 and len(snap.movements) == 1
+    assert snap.tables['Arbitraggio'][0]['ID'] == mid
+    assert snap.tables['Arbitraggio'][0]['Stato'] == 'Ricevuto'
+    assert snap.tables['Movimenti'][0]['Data'] == later
+    assert total_balance(snap) == 45
 
 
 @pytest.mark.parametrize('failure', ['before','after'])
