@@ -245,7 +245,8 @@ def test_transfer_form_filters_edit_and_delete_update_both_accounts(app):
     at.selectbox(key="movement_account_filter").set_value("Contanti").run()
     assert not at.exception and len(at.dataframe[0].value) == 1
     assert at.dataframe[0].value.iloc[0]["Conto"] == "Conto personale → Contanti"
-    assert at.dataframe[0].value.iloc[0]["Importo"] == "30,00 €"
+    assert at.dataframe[0].value.iloc[0]["Importo"] == "+30,00 €"
+    assert at.dataframe[0].value.iloc[0]["Tipo"] == "Entrata"
     at.selectbox(key="selected_movement").set_value(record["ID"]).run()
     widget(at.button, "Modifica movimento").click().run()
     assert widget(at.radio, "Tipo di movimento").value == "Giroconto"
@@ -317,3 +318,46 @@ def test_sidebar_navigation_leaves_full_page_form(app):
     assert any(button.label == "+ Nuova partita" for button in at.button)
     assert not any(button.key == "editor_back" for button in at.button)
     assert service.snapshot().movements.empty
+
+
+def test_account_movements_show_current_balance_and_transfer_direction_with_filters(app):
+    at, service = app
+    source = service.snapshot().accounts[0]
+    service.save_account(name=source["Nome"], opening_balance=100, account_id=source["ID"])
+    service.save_movement(kind="Giroconto", amount=30, date=today(), description="Trasferimento", category="", source="", account="Conto personale", destination_account="Contanti")
+    at.sidebar.radio[0].set_value("💸 Movimenti").run()
+    at.selectbox(key="movement_account_filter").set_value("Conto personale").run()
+    assert not at.exception
+    row = at.dataframe[0].value.iloc[0]
+    assert row["Tipo"] == "Uscita" and row["Importo"] == "-30,00 €"
+    assert row["Origine"] == "⇄ Giroconto"
+    cards = next(m.value for m in at.markdown if 'class="metrics"' in m.value)
+    assert "Saldo attuale" in cards and "70,00 €" in cards and "-30,00 €" in cards
+    at.selectbox(key="movement_kind_filter").set_value("Entrata").run()
+    assert not at.exception and not at.dataframe
+    at.selectbox(key="movement_kind_filter").set_value("Uscita").run()
+    assert not at.exception and len(at.dataframe[0].value) == 1
+    at.selectbox(key="movement_account_filter").set_value("Contanti").run()
+    assert not at.exception and not at.dataframe
+    at.selectbox(key="movement_kind_filter").set_value("Entrata").run()
+    assert not at.exception and at.dataframe[0].value.iloc[0]["Importo"] == "+30,00 €"
+    at.selectbox(key="movement_kind_filter").set_value("Giroconto").run()
+    assert not at.exception and len(at.dataframe[0].value) == 1
+    at.text_input(key="movement_search").set_value("inesistente").run()
+    assert not at.exception and not at.dataframe
+    cards = next(m.value for m in at.markdown if 'class="metrics"' in m.value)
+    assert "30,00 €" in cards and cards.count('class="metric-value">0,00 €') == 3
+    at.text_input(key="movement_search").set_value("").run()
+    at.radio(key="movements_mode").set_value("Periodo").run()
+    at.date_input(key="movements_start").set_value(today() + timedelta(days=1))
+    at.date_input(key="movements_end").set_value(today() + timedelta(days=1)).run()
+    assert not at.exception and not at.dataframe
+    cards = next(m.value for m in at.markdown if 'class="metrics"' in m.value)
+    assert "30,00 €" in cards and cards.count('class="metric-value">0,00 €') == 3
+    at.radio(key="movements_mode").set_value("Tutto").run()
+    at.selectbox(key="movement_account_filter").set_value(None).run()
+    assert not at.exception
+    assert at.dataframe[0].value.iloc[0]["Tipo"] == "Giroconto"
+    cards = next(m.value for m in at.markdown if 'class="metrics"' in m.value)
+    assert "100,00 €" in cards and cards.count('class="metric-value">0,00 €') == 3
+    assert len(service.snapshot().movements) == 1

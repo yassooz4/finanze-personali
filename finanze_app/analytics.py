@@ -31,6 +31,18 @@ def account_movements(frame, account):
     return frame[(frame["Conto"] == account) | (frame["Conto_destinazione"] == account)].copy()
 
 
+def movement_view(frame, account=None):
+    """Show transfers as cash in/out for one account, keeping stored rows intact."""
+    result = account_movements(frame, account) if account is not None else frame.copy()
+    result["_Giroconto"] = result["Tipo"] == "Giroconto"
+    if account is not None:
+        incoming = result["_Giroconto"] & (result["Conto_destinazione"] == account)
+        outgoing = result["_Giroconto"] & (result["Conto"] == account)
+        result.loc[incoming, "Tipo"] = "Entrata"
+        result.loc[outgoing, "Tipo"] = "Uscita"
+    return result
+
+
 def account_balances(snapshot: Snapshot):
     frame = snapshot.movements
     rows = []

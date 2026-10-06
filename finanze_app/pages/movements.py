@@ -18,28 +18,33 @@ def render(service, snapshot):
         account = col3.selectbox("Conto", [None] + snapshot.account_names(), format_func=lambda value: value if value is not None else "Tutti", key="movement_account_filter")
         category_options = [None, ""] + sorted([row["Nome"] for row in snapshot.categories], key=str.casefold)
         category = col4.selectbox("Categoria", category_options, format_func=lambda value: "Tutte" if value is None else (value or "Senza categoria"), key="movement_category_filter")
-    if kind is not None:
+    filtered = stats.movement_view(filtered, account)
+    if kind == "Giroconto":
+        filtered = filtered[filtered["_Giroconto"]]
+    elif kind is not None:
         filtered = filtered[filtered["Tipo"] == kind]
-    if account is not None:
-        filtered = stats.account_movements(filtered, account)
     if category is not None:
         filtered = filtered[filtered["Categoria"] == category]
     if search.strip() and not filtered.empty:
         text = filtered[["Descrizione", "Fonte", "Note", "Categoria", "Conto", "Conto_destinazione"]].fillna("").agg(" ".join, axis=1)
         filtered = filtered[text.str.contains(search.strip(), case=False, regex=False)]
     income, expenses, net = stats.totals(filtered)
+    balances = stats.account_balances(snapshot)
+    balance = stats.total_balance(snapshot) if account is None else float(balances.loc[balances["Conto"] == account, "Saldo"].iloc[0])
     ui.metrics([
+        ("Saldo attuale", euro(balance), account or "Tutti i conti · giroconti inclusi nei saldi", "▣", "negative" if balance < 0 else ""),
         ("Entrate", euro(income), "Nei risultati filtrati", "↙", ""),
         ("Uscite", euro(expenses), "Nei risultati filtrati", "↗", "expense"),
         ("Differenza", euro(net, signed=True), f"{len(filtered)} movimenti", "≈", "negative" if net < 0 else ""),
     ])
+    st.caption("Il saldo attuale comprende il saldo iniziale e tutti i movimenti, indipendentemente dai filtri. Entrate, uscite e differenza si riferiscono ai risultati filtrati.")
     with st.container(border=True, key="panel_movements_2"):
         st.subheader("Storico dei movimenti")
         if filtered.empty:
             ui.empty("Nessun movimento corrisponde ai filtri.")
         else:
             ui.movement_table(filtered, "all_movements")
-            st.caption("Le entrate ⚽ provengono dalle partite. I giroconti ⇄ spostano soldi tra i conti e non sono conteggiati come guadagni o spese.")
+            st.caption("I giroconti ⇄ sono uscite dal conto di partenza ed entrate nel conto di arrivo." if account is not None else "Le entrate ⚽ provengono dalle partite. Nella vista Tutti, i giroconti ⇄ non sono conteggiati come guadagni o spese: il totale generale rimane invariato.")
     if filtered.empty:
         return
     with st.expander("Modifica o elimina un movimento", expanded=True):

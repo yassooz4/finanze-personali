@@ -242,10 +242,11 @@ def period_filter(frame, *, key, column="Data", default="Tutto"):
 
 def movement_table(frame, key):
     display = frame.sort_values(["Data", "Data_creazione"], ascending=False).copy()
+    transfers = display["_Giroconto"] if "_Giroconto" in display else display["Tipo"] == "Giroconto"
     display["Importo"] = display.apply(lambda row: euro(-row["Importo"] if row["Tipo"] == "Uscita" else row["Importo"], signed=row["Tipo"] != "Giroconto"), axis=1) if not display.empty else pd.Series(dtype=str)
-    display["Origine"] = display.apply(lambda row: "⚽ Partita" if row["Arbitraggio_ID"] else ("⇄ Giroconto" if row["Tipo"] == "Giroconto" else "Manuale"), axis=1) if not display.empty else pd.Series(dtype=str)
+    display["Origine"] = display.apply(lambda row: "⚽ Partita" if row["Arbitraggio_ID"] else ("⇄ Giroconto" if row.get("_Giroconto", row["Tipo"] == "Giroconto") else "Manuale"), axis=1) if not display.empty else pd.Series(dtype=str)
     if not display.empty:
-        display["Conto"] = display.apply(lambda row: f"{row['Conto']} → {row['Conto_destinazione']}" if row["Tipo"] == "Giroconto" else row["Conto"], axis=1)
+        display.loc[transfers, "Conto"] = display.loc[transfers, "Conto"] + " → " + display.loc[transfers, "Conto_destinazione"]
     display = display[["Data", "Tipo", "Importo", "Categoria", "Descrizione", "Conto", "Fonte", "Note", "Origine"]]
     st.dataframe(display, hide_index=True, width="stretch", column_config={"Data": st.column_config.DateColumn("Data", format="DD/MM/YYYY")}, key=key)
 
