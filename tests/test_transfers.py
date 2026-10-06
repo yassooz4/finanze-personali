@@ -162,3 +162,32 @@ def test_transfers_use_exact_cents(service):
     transfer(service, amount=.2)
     assert balances(service) == {"Conto personale": 0, "Contanti": .3}
     assert stats.total_balance(service.snapshot()) == .3
+
+
+def test_account_movement_view_counts_transfer_sides_without_changing_archive(service):
+    opening(service, "Conto personale", 100)
+    mid = transfer(service, amount=30.25)
+    service.save_movement(kind="Entrata", amount=50, date=today(), description="Lavoro", category="Stipendio", source="", account="Conto personale")
+    service.save_movement(kind="Uscita", amount=10, date=today(), description="Spesa", category="Cibo", source="", account="Contanti")
+    before = service.store.path.read_bytes()
+    frame = service.snapshot().movements
+    source = stats.movement_view(frame, "Conto personale")
+    destination = stats.movement_view(frame, "Contanti")
+    assert stats.totals(source) == (50, 30.25, 19.75)
+    assert stats.totals(destination) == (30.25, 10, 20.25)
+    assert source.loc[source["ID"] == mid, "Tipo"].iloc[0] == "Uscita"
+    assert destination.loc[destination["ID"] == mid, "Tipo"].iloc[0] == "Entrata"
+    assert stats.totals(stats.movement_view(frame)) == (50, 10, 40)
+    assert frame.loc[frame["ID"] == mid, "Tipo"].iloc[0] == "Giroconto"
+    assert service.store.path.read_bytes() == before
+    assert len(frame) == 3 and stats.total_balance(service.snapshot()) == 140
+
+
+def test_account_movement_view_supports_empty_period_and_exact_cents(service):
+    transfer(service, amount=.1)
+    transfer(service, amount=.2)
+    frame = service.snapshot().movements
+    assert stats.totals(stats.movement_view(frame, "Conto personale")) == (0, .3, -.3)
+    assert stats.totals(stats.movement_view(frame, "Contanti")) == (.3, 0, .3)
+    empty = stats.date_filter(frame, start=today() + timedelta(days=1))
+    assert stats.totals(stats.movement_view(empty, "Contanti")) == (0, 0, 0)

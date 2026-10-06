@@ -39,7 +39,7 @@ def create_service():
 
 
 def main():
-    st.set_page_config(page_title="Finanze · v2.3", page_icon="💶", layout="wide", initial_sidebar_state="auto")
+    st.set_page_config(page_title="Finanze · v2.4", page_icon="💶", layout="wide", initial_sidebar_state="auto")
     ui.apply_style()
     require_login()
     with st.sidebar:
@@ -49,7 +49,7 @@ def main():
         st.button("🔒 Esci", on_click=logout, width="stretch")
         if st.button("↻ Aggiorna dati", width="stretch"):
             st.rerun()
-        st.markdown('<div class="sidebar-note"><b>Un unico posto per i tuoi soldi</b>Conti, spese e partite.<br>Versione 2.3 · Google Sheets · Moduli su pagina</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-note"><b>Un unico posto per i tuoi soldi</b>Conti, spese e partite.<br>Versione 2.4 · Google Sheets · Saldi e giroconti per conto</div>', unsafe_allow_html=True)
     ui.show_flash()
     try:
         service = create_service()
