@@ -189,7 +189,8 @@ class ExcelStore:
         temporary_path = Path(temporary_name)
         try:
             workbook.save(temporary_path)
-            with temporary_path.open("rb") as handle:
+            # Windows requires write access for fsync, even after saving the file.
+            with temporary_path.open("r+b") as handle:
                 os.fsync(handle.fileno())
             if self._fingerprint() != fingerprint:
                 raise ConflictError("L'Excel è cambiato durante il salvataggio. Aggiorna i dati e riprova.")

@@ -39,11 +39,18 @@ def require_login():
 
     _, center, _ = st.columns([1, 2, 1])
     with center:
-        st.markdown("## 🔒 Il tuo spazio personale")
-        st.caption("Inserisci la password per accedere alle tue finanze.")
-        with st.form("login", clear_on_submit=True):
-            st.text_input("Password", type="password", key="_login_password")
-            st.form_submit_button("Accedi", type="primary", on_click=verify, width="stretch")
-        if st.session_state.get("_login_error"):
-            st.error("Password non corretta.")
+        with st.container(key="login_shell"):
+            st.markdown(
+                '<div class="login-brand"><div class="brand-mark">f</div>finanze</div>'
+                '<div class="eyebrow">IL TUO SPAZIO PERSONALE</div>'
+                '<h1 class="login-title">I tuoi soldi.<br>Una visione chiara.</h1>'
+                '<p class="login-caption">Inserisci la password per accedere alle tue finanze.</p>',
+                unsafe_allow_html=True,
+            )
+            with st.form("login", clear_on_submit=True):
+                st.text_input("Password", type="password", key="_login_password")
+                st.form_submit_button("Accedi", type="primary", on_click=verify, width="stretch")
+            if st.session_state.get("_login_error"):
+                st.error("Password non corretta.")
+            st.caption("🔒 Accesso riservato · I tuoi dati restano protetti dalla password.")
     st.stop()

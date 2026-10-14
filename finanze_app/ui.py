@@ -14,10 +14,10 @@ from .service import KINDS
 from .utils import euro, new_id, today
 
 
-GREEN = "#279B82"
-CORAL = "#E39A87"
-NAVY = "#243F59"
-PALETTE = [GREEN, NAVY, "#84B9CE", "#A0A2D2", "#E7B77F", "#91C5B2", CORAL, "#C0CDDA"]
+GREEN = "#34D399"
+CORAL = "#F29A91"
+NAVY = "#88AFA6"
+PALETTE = [GREEN, "#80B8A8", "#81A7D1", "#B0A4D9", "#D6B580", CORAL, "#92B9C0", "#B6C4AD"]
 
 
 def apply_style():
@@ -74,7 +74,7 @@ def page_header(title, subtitle, service, *, match=False, action=True):
     left, right = st.columns([4, 1.35], vertical_alignment="center")
     with left:
         st.markdown(
-            f'<div class="eyebrow">LE TUE FINANZE</div><div class="page-title">{escape(title)}</div>'
+            f'<div class="eyebrow">LE TUE FINANZE</div><h1 class="page-title">{escape(title)}</h1>'
             f'<div class="page-subtitle">{escape(subtitle)}</div>', unsafe_allow_html=True,
         )
     if action:
@@ -88,14 +88,14 @@ def page_header(title, subtitle, service, *, match=False, action=True):
 def hero(balance):
     current = today()
     st.markdown(
-        f'<div class="hero"><div class="hero-tag">TOTALE GENERALE</div>'
+        f'<div class="hero"><div class="hero-tag"><span class="status-dot"></span> TUTTI I CONTI</div>'
         f'<div class="hero-label">Patrimonio totale</div><div class="hero-value">{euro(balance)}</div>'
         f'<div class="hero-footer">Tutti i tuoi conti · aggiornato al {current:%d/%m/%Y}</div></div>',
         unsafe_allow_html=True,
     )
 
 
-def metrics(items):
+def metrics(items, *, stacked=False):
     cards = []
     for item in items:
         label, value, caption, icon, style = item
@@ -104,7 +104,8 @@ def metrics(items):
             f'<span class="metric-label">{escape(label)}</span><span class="metric-icon">{escape(icon)}</span></div>'
             f'<div class="metric-value">{escape(str(value))}</div><div class="metric-caption">{escape(caption)}</div></div>'
         )
-    st.markdown(f'<div class="metrics" style="--cols:{len(items)}">{"".join(cards)}</div>', unsafe_allow_html=True)
+    layout = " metrics-stacked" if stacked else ""
+    st.markdown(f'<div class="metrics{layout}" style="--cols:{len(items)}">{"".join(cards)}</div>', unsafe_allow_html=True)
 
 
 def accounts_overview(snapshot):
@@ -125,14 +126,14 @@ def empty(message, icon="◌"):
 
 def chart_style(figure, height=290):
     figure.update_layout(
-        height=height, margin=dict(l=10, r=12, t=24, b=22),
+        height=height, margin=dict(l=6, r=10, t=28, b=12),
         paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
-        font=dict(family="Arial, sans-serif", size=12, color="#8190A3"),
+        font=dict(family="Inter, Segoe UI, sans-serif", size=12, color="#A3B5AD"),
         legend=dict(orientation="h", y=1.13, x=0, font=dict(size=11)),
-        separators=",.", hoverlabel=dict(bgcolor="#14243b", font_color="white"),
+        separators=",.", hoverlabel=dict(bgcolor="#20332A", bordercolor="#3A5446", font_color="#EDF5F0"),
     )
     figure.update_xaxes(showgrid=False, zeroline=False, title=None, tickfont=dict(size=11), automargin=True)
-    figure.update_yaxes(gridcolor="#EDF1F5", zeroline=False, title=None, ticksuffix=" €", tickformat=",.0f", tickfont=dict(size=11), automargin=True)
+    figure.update_yaxes(gridcolor="#23332B", zeroline=False, title=None, ticksuffix=" €", tickformat=",.0f", tickfont=dict(size=11), automargin=True, nticks=5)
     return figure
 
 
@@ -140,16 +141,24 @@ def show_chart(figure, key):
     st.plotly_chart(figure, width="stretch", theme=None, config={"displayModeBar": False, "responsive": True}, key=key)
 
 
-def balance_chart(frame, key):
+def balance_chart(frame, key, *, height=290):
     if frame.empty:
         empty("Il tuo andamento apparirà dopo il primo movimento.")
         return
     figure = go.Figure(go.Scatter(
         x=frame["Data"], y=frame["Saldo"], mode="lines", line=dict(color=GREEN, width=2.7),
-        fill="tozeroy", fillcolor="rgba(39,155,130,.09)", name="Patrimonio",
+        fill="tozeroy", fillcolor="rgba(52,211,153,.06)", name="Patrimonio",
         hovertemplate="%{x|%d/%m/%Y}<br><b>%{y:,.2f} €</b><extra></extra>",
     ))
-    show_chart(chart_style(figure), key)
+    figure = chart_style(figure, height)
+    figure.update_layout(hovermode="x unified", showlegend=False)
+    month_ticks = pd.date_range(frame["Data"].min(), frame["Data"].max(), freq="MS")
+    if len(month_ticks) > 1:
+        month_ticks = month_ticks[::max(1, (len(month_ticks) + 3) // 4)]
+        figure.update_xaxes(tickvals=month_ticks, ticktext=[f"{MONTHS[value.month-1][:3]} {value.year}" for value in month_ticks])
+    else:
+        figure.update_xaxes(tickformat="%d/%m")
+    show_chart(figure, key)
 
 
 def flows_chart(frame, key):
@@ -160,7 +169,7 @@ def flows_chart(frame, key):
     figure = go.Figure()
     for field, color in (("Entrate", GREEN), ("Uscite", CORAL)):
         figure.add_trace(go.Bar(x=labels, y=frame[field], name=field, marker_color=color, hovertemplate="%{x}<br>%{y:,.2f} €<extra>%{fullData.name}</extra>"))
-    figure.update_layout(barmode="group", bargap=.4, bargroupgap=.13)
+    figure.update_layout(barmode="group", bargap=.4, bargroupgap=.13, barcornerradius=4)
     show_chart(chart_style(figure), key)
 
 
@@ -170,11 +179,17 @@ def donut_chart(frame, field, key, empty_message):
         return
     figure = go.Figure(go.Pie(
         labels=frame[field], values=frame["Importo"], hole=.72, sort=False,
-        marker=dict(colors=PALETTE, line=dict(color="white", width=3)),
+        marker=dict(colors=PALETTE, line=dict(color="#111B16", width=3)),
+        domain=dict(x=[0, .55]),
         textinfo="none", hovertemplate="%{label}<br><b>%{value:,.2f} €</b><br>%{percent}<extra></extra>",
     ))
-    figure = chart_style(figure)
-    figure.update_layout(legend=dict(orientation="v", x=1.02, y=.95, font=dict(size=11)), margin=dict(l=0, r=0, t=5, b=5))
+    figure = chart_style(figure, height=290)
+    figure.update_layout(
+        legend=dict(orientation="v", x=.64, y=.85, font=dict(size=11), traceorder="normal"),
+        margin=dict(l=0, r=0, t=10, b=10),
+        annotations=[dict(text="TOTALE", x=.275, y=.56, xanchor="center", yanchor="middle", xref="paper", yref="paper", showarrow=False, font=dict(size=10, color="#A3B5AD")),
+                     dict(text=euro(frame["Importo"].sum()), x=.275, y=.44, xanchor="center", yanchor="middle", xref="paper", yref="paper", showarrow=False, font=dict(size=17, color="#EDF5F0"))],
+    )
     show_chart(figure, key)
 
 
