@@ -62,8 +62,8 @@ h3 { font-size:1.08rem !important; font-weight:600 !important; padding-top:.1rem
 [data-testid="stForm"] { background:var(--surface); border-color:var(--line); border-radius:14px; }
 [data-testid="stExpander"] { background:var(--surface); border-color:var(--line); border-radius:12px; }
 [data-testid="stButton"] button,[data-testid="stFormSubmitButton"] button,[data-testid="stDownloadButton"] button { border-radius:9px; min-height:44px; font-weight:600; border-color:#304438; }
-[data-testid="stButton"] button[kind="primary"],[data-testid="stFormSubmitButton"] button[kind="primary"] { background:var(--green); color:#052819; border-color:var(--green); }
-[data-testid="stButton"] button[kind="primary"]:hover,[data-testid="stFormSubmitButton"] button[kind="primary"]:hover { background:#6ae6b3; border-color:#6ae6b3; }
+[data-testid="stButton"] button[kind^="primary"],[data-testid="stFormSubmitButton"] button[kind^="primary"] { background:var(--green); color:#052819; border-color:var(--green); }
+[data-testid="stButton"] button[kind^="primary"]:hover,[data-testid="stFormSubmitButton"] button[kind^="primary"]:hover { background:#6ae6b3; border-color:#6ae6b3; }
 button:focus-visible,input:focus-visible,textarea:focus-visible { outline:2px solid var(--green); outline-offset:2px; }
 [data-testid="stTextInput"] input,[data-testid="stNumberInput"] input,[data-testid="stTextArea"] textarea { background:#16251c; color:var(--ink); }
 [data-testid="stCaptionContainer"] { color:var(--muted); }
