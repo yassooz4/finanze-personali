@@ -44,12 +44,16 @@ def main():
     require_login()
     with st.sidebar:
         st.markdown('<div class="brand"><div class="brand-mark">f</div><div><div class="brand-name">finanze</div><div class="brand-caption">il tuo spazio personale</div></div></div><div class="nav-caption">IL TUO SPAZIO</div>', unsafe_allow_html=True)
-        page = st.radio("Navigazione", list(PAGES), label_visibility="collapsed", key="page", on_change=ui.close_editor)
+        page = st.radio("Navigazione", list(PAGES), format_func=lambda value: {
+            "🏠 Dashboard": "◈　Dashboard", "💸 Movimenti": "⇄　Movimenti",
+            "⚽ Arbitraggio": "◎　Arbitraggio", "📊 Statistiche": "▥　Statistiche",
+            "⚙️ Gestione": "⚙　Gestione",
+        }[value], label_visibility="collapsed", width="stretch", key="page", on_change=ui.close_editor)
         st.divider()
         st.button("🔒 Esci", on_click=logout, width="stretch")
         if st.button("↻ Aggiorna dati", width="stretch"):
             st.rerun()
-        st.markdown('<div class="sidebar-note"><span class="status-dot"></span> IL TUO SPAZIO PERSONALE<b>Ogni conto, una vista chiara.</b>Entrate, spese e partite.<br>Tutto sotto controllo.</div>', unsafe_allow_html=True)
+        st.markdown('<div class="sidebar-note"><span class="note-orbit" aria-hidden="true">✳</span><div class="nav-caption">IL TUO SPAZIO PERSONALE</div><b>Più chiarezza.<br>Più controllo.</b><span>Entrate, spese e partite.<br>Ogni cosa al suo posto.</span></div>', unsafe_allow_html=True)
     ui.show_flash()
     try:
         service = create_service()
