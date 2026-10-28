@@ -318,3 +318,22 @@ def test_two_sessions_preserve_both_saves():
         list(pool.map(lambda s: match(s), sessions))
     snap = service(remote).snapshot()
     assert len(snap.matches) == 2 and len(set(snap.matches['ID'])) == 2
+
+
+def test_movements_export_csv_and_xlsx():
+    import pandas as pd
+    from io import BytesIO
+    from finanze_app.export import movements_csv, movements_xlsx
+    frame = pd.DataFrame({
+        "ID": ["a", "b"],
+        "Data": pd.to_datetime(["2026-01-02", "2026-01-03"]),
+        "Importo": [10.5, 3.0],
+        "Descrizione": ["=SOMMA(A1)", "Pizza"],
+        "_Giroconto": [False, False],
+    })
+    csv = movements_csv(frame).decode("utf-8-sig")
+    assert csv.splitlines()[0] == "ID;Data;Importo;Descrizione"
+    assert "2026-01-02" in csv and "10,5" in csv and "'=SOMMA(A1)" in csv
+    sheet = pd.read_excel(BytesIO(movements_xlsx(frame)), sheet_name="Movimenti")
+    assert list(sheet.columns) == ["ID", "Data", "Importo", "Descrizione"]
+    assert len(sheet) == 2

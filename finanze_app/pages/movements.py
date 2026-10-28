@@ -2,6 +2,7 @@ import streamlit as st
 
 from .. import analytics as stats
 from .. import ui
+from ..export import movements_csv, movements_xlsx
 from ..service import KINDS
 from ..utils import euro
 
@@ -47,6 +48,12 @@ def render(service, snapshot):
             st.caption("I giroconti ⇄ sono uscite dal conto di partenza ed entrate nel conto di arrivo." if account is not None else "Le entrate ⚽ provengono dalle partite. Nella vista Tutti, i giroconti ⇄ non sono conteggiati come guadagni o spese: il totale generale rimane invariato.")
     if filtered.empty:
         return
+    with st.container(border=True, key="panel_movements_export"):
+        st.subheader("Scarica i movimenti")
+        st.caption(f"Il file contiene i {len(filtered)} movimenti mostrati con i filtri attuali. Per averli tutti, azzera i filtri.")
+        left, right = st.columns(2)
+        left.download_button("Scarica CSV", data=movements_csv(filtered), file_name="movimenti.csv", mime="text/csv", width="stretch")
+        right.download_button("Scarica Excel", data=movements_xlsx(filtered), file_name="movimenti.xlsx", mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", width="stretch")
     with st.expander("Modifica o elimina un movimento", expanded=True):
         records = {row["ID"]: row for row in snapshot.tables["Movimenti"]}
         ids = filtered.sort_values(["Data", "Data_creazione"], ascending=False)["ID"].tolist()
