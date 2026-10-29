@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import date, timedelta
 from pathlib import Path
 
 import pytest
@@ -361,3 +361,13 @@ def test_account_movements_show_current_balance_and_transfer_direction_with_filt
     cards = next(m.value for m in at.markdown if 'class="metrics"' in m.value)
     assert "100,00 €" in cards and cards.count('class="metric-value">0,00 €') == 3
     assert len(service.snapshot().movements) == 1
+
+
+def test_report_page_renders_empty_and_with_movements(app):
+    at, service = app
+    at.sidebar.radio[0].set_value("\U0001F4D1 Report").run()
+    assert not at.exception
+    service.save_movement(kind="Entrata", amount=50, date=date(2026, 1, 10), description="Regalo", category="Altro", source="Test", account="Conto personale")
+    at.run()
+    assert not at.exception
+    assert "Scarica" in [subheader.value for subheader in at.subheader]
