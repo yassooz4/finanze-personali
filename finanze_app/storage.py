@@ -32,6 +32,8 @@ SCHEMA = {
     ],
     "Categorie": ["ID", "Nome", "Tipo"],
     "Conti": ["ID", "Nome", "Saldo_iniziale"],
+    "Budget": ["ID", "Inizio", "Fine", "Limite", "Riserva", "Conti_ID", "Preferenze"],
+    "Impegni": ["ID", "Budget_ID", "Descrizione", "Importo", "Scadenza", "Movimento_ID"],
 }
 
 DEFAULT_CATEGORIES = [

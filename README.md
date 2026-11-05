@@ -17,6 +17,28 @@ Le vecchie partite non vengono importate automaticamente. Il precedente ramo `da
 
 ## Funzioni
 
+### Budget e assistente gratuito
+
+Apri **Assistente > Piano** e imposta periodo, limite totale delle uscite, conti da usare e riserva da conservare. Puoi conservare più periodi senza sovrapporli. Il limite comprende le uscite già registrate nel periodo. Le preferenze sono salvate insieme al piano e restano disponibili nelle nuove conversazioni.
+
+In **Scadenze** aggiungi le spese ancora da pagare, comprese quelle scadute. Dopo aver registrato un pagamento nei Movimenti, collegalo all'impegno: l'accantonamento sparisce e conta l'importo effettivo del movimento. Ogni uscita può pagare un solo impegno. Prima di eliminare o spostare un movimento collegato, scollega l'impegno. Un impegno è una spesa singola; pagamenti parziali vanno suddivisi in più impegni.
+
+Il margine è il minore fra limite residuo meno impegni e saldo dei conti meno impegni e riserva. I saldi includono i giroconti, che non consumano il budget. Le entrate da arbitraggio non incassate restano escluse. **Simula una spesa** e il riepilogo in Dashboard funzionano anche senza AI. Una simulazione considera una nuova spesa aggiuntiva, non il pagamento di un impegno già accantonato. I riferimenti giornalieri sono flessibili e arrotondati per difetto ai centesimi.
+
+Per la chat:
+
+1. Crea un account su https://console.groq.com e mantieni il piano **Free**, senza aggiungere fatturazione o passare a Developer.
+2. Genera una chiave API e inseriscila soltanto in Streamlit Cloud > Settings > Secrets, nella sezione `[groq]` del modello `secrets.example.toml`. Dopo aver verificato il piano Free, imposta `free_plan_confirmed = true`. Non incollare chiavi in chat o su GitHub.
+3. Apri la scheda Chat e abilita l'invio dei dati a Groq. Vengono inviati messaggi recenti, riepilogo del budget, categorie e preferenze, non credenziali o l'intero archivio. Il testo che scrivi viene trasmesso al servizio. Puoi cancellare la conversazione; il logout cancella anche lo stato della chat.
+
+Puoi chiedere un riepilogo, simulare un acquisto, ottenere consigli sulle categorie del periodo e proporre un nuovo limite. Le modifiche al budget vengono validate e salvate solo dopo **Conferma nuovo budget**. Se dici quanto rimane da oggi, il piano esistente conserva lo storico e aggiunge le spese già registrate al nuovo limite totale. La chat non registra né elimina movimenti.
+
+L'app non attiva abbonamenti, servizi alternativi o retry automatici. Su errore 429 si ferma e mostra che la quota è esaurita. Un limite aggiuntivo di 50 richieste al giorno per chiave e istanza e una pausa di 3 secondi riducono l'uso; questo contatore si azzera al riavvio e non sostituisce i limiti dell'account. **L'API non permette a questa app di verificare la fatturazione: la gratuità richiede che l'account resti Free.** Una chiave di un account Developer potrebbe generare addebiti anche con questa configurazione. Il modello è configurabile se Groq cambia disponibilità; non viene scelto automaticamente un altro modello.
+
+I calcoli delle simulazioni vengono eseguiti dall'app in centesimi. I consigli testuali AI possono essere imprecisi: controlla sempre il riepilogo calcolato e mantieni aggiornati movimenti e scadenze. Non è stata effettuata una chiamata reale senza chiave. Condizioni e quote aggiornate: https://console.groq.com/docs/rate-limits e https://console.groq.com/docs/billing-faqs.
+
+La migrazione aggiunge le schede **Budget** e **Impegni** a Google Sheets e all'export Excel, preservando le schede esistenti e le colonne personalizzate. Conserva una copia del foglio prima dell'aggiornamento; le vecchie versioni dell'app non gestiscono le nuove schede.
+
 - Dashboard, movimenti con aggiunta/modifica/eliminazione, statistiche, conti e categorie personalizzabili.
 - I moduli per creare e modificare movimenti, giroconti e partite si aprono su una schermata dedicata, con lo scorrimento normale della pagina anche da telefono. Torna indietro chiude il modulo senza salvare; dopo il salvataggio ritorni alla pagina di partenza.
 - **Giroconto** in + Nuovo movimento: scegli conto di partenza, conto di arrivo e importo. Lo spostamento aggiorna entrambi i saldi e resta un unico record. In Movimenti, selezionando un conto compare come uscita dalla partenza o entrata nell'arrivo, con segno e riepiloghi coerenti. Nella vista Tutti e nelle statistiche generali non modifica guadagni o spese. Puoi modificarlo ed eliminarlo come gli altri movimenti.

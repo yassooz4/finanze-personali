@@ -31,9 +31,53 @@ def app(tmp_path, monkeypatch):
 
 def test_every_empty_page_renders(app):
     at, _ = app
-    for page in ("💸 Movimenti", "⚽ Arbitraggio", "📊 Statistiche", "⚙️ Gestione", "🏠 Dashboard"):
+    for page in ("💬 Assistente", "💸 Movimenti", "⚽ Arbitraggio", "📊 Statistiche", "⚙️ Gestione", "🏠 Dashboard"):
         at.sidebar.radio[0].set_value(page).run()
         assert not at.exception, page
+
+
+def test_budget_form_simulation_and_dashboard_without_ai(app):
+    at, service = app
+    account = service.snapshot().accounts[0]
+    service.save_account(name=account['Nome'], account_id=account['ID'], opening_balance=1000)
+    at.sidebar.radio[0].set_value('💬 Assistente').run()
+    widget(at.number_input, 'Limite totale del periodo (€)').set_value(500)
+    widget(at.number_input, 'Riserva da conservare (€)').set_value(100)
+    widget(at.button, 'Salva piano').click().run()
+    assert not at.exception
+    assert service.snapshot().tables['Budget'][0]['Limite'] == 500
+    widget(at.number_input, 'Quanto vorresti spendere? (€)').set_value(600).run()
+    assert not at.exception
+    assert any('supera il margine' in w.value for w in at.warning)
+    widget(at.text_input, 'Spesa prevista').set_value('Bolletta')
+    widget(at.number_input, 'Importo previsto (€)').set_value(80)
+    widget(at.button, 'Aggiungi impegno').click().run()
+    assert not at.exception
+    assert service.snapshot().tables['Impegni'][0]['Importo'] == 80
+    at.sidebar.radio[0].set_value('🏠 Dashboard').run()
+    assert not at.exception
+    assert any(m.label == 'Margine da spendere' for m in at.metric)
+
+
+def test_chat_budget_requires_confirmation_and_logout_clears_it(app, monkeypatch):
+    from finanze_app.budget import active_plan
+    at, service = app
+    end = today().replace(day=28) if today().day <= 28 else today()
+    at.secrets['groq'] = {'api_key': 'fake-key', 'free_plan_confirmed': True}
+    monkeypatch.setattr('finanze_app.pages.assistant.interpret', lambda *a, **k: {
+        'intent': 'set_budget', 'answer': '', 'amount': 200, 'start': today().isoformat(),
+        'end': end.isoformat(), 'mode': 'remaining'})
+    at.sidebar.radio[0].set_value('💬 Assistente').run()
+    at.checkbox(key='assistant_consent').check().run()
+    at.chat_input[0].set_value('Mi restano 200 euro da oggi').run()
+    assert not at.exception
+    assert active_plan(service.snapshot()) is None
+    widget(at.button, 'Conferma nuovo budget').click().run()
+    assert not at.exception
+    assert active_plan(service.snapshot())['Limite'] == 200
+    widget(at.button, '🔒 Esci').click().run()
+    assert 'assistant_history' not in at.session_state
+    assert 'budget_proposal' not in at.session_state
 
 
 def test_add_and_edit_movement_through_form(app):
