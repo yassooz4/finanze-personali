@@ -9,13 +9,14 @@ from finanze_app import ui
 from finanze_app.auth import require_login, logout
 from finanze_app.errors import FinanceError, StorageError
 from finanze_app.sheets_storage import google_store
-from finanze_app.pages import dashboard, movements, referee, report, settings, statistics
+from finanze_app.pages import assistant, dashboard, movements, referee, report, settings, statistics
 from finanze_app.service import FinanceService
 
 
 PROJECT_ROOT = Path(__file__).resolve().parent
 PAGES = {
     "🏠 Dashboard": dashboard,
+    "💬 Assistente": assistant,
     "💸 Movimenti": movements,
     "⚽ Arbitraggio": referee,
     "📊 Statistiche": statistics,
@@ -47,6 +48,7 @@ def main():
         st.markdown('<div class="brand"><div class="brand-mark">f</div><div><div class="brand-name">finanze</div><div class="brand-caption">il tuo spazio personale</div></div></div><div class="nav-caption">IL TUO SPAZIO</div>', unsafe_allow_html=True)
         page = st.radio("Navigazione", list(PAGES), format_func=lambda value: {
             "🏠 Dashboard": "◈　Dashboard", "💸 Movimenti": "⇄　Movimenti",
+            "💬 Assistente": "✳　Assistente",
             "⚽ Arbitraggio": "◎　Arbitraggio", "📊 Statistiche": "▥　Statistiche", "📑 Report": "▤　Report",
             "⚙️ Gestione": "⚙　Gestione",
         }[value], label_visibility="collapsed", width="stretch", key="page", on_change=ui.close_editor)

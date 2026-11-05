@@ -8,6 +8,12 @@ from ..utils import euro, today
 
 def render(service, snapshot):
     ui.page_header("Dashboard", "Bentornato. Ecco come stanno le tue finanze.", service)
+    from ..budget import active_plan
+    from .assistant import render_metrics
+    plan = active_plan(snapshot)
+    if plan:
+        render_metrics(snapshot, plan)
+        st.button("Apri assistente →", on_click=ui.navigate, args=("💬 Assistente",))
     current = today()
     month_name = f"{stats.MONTHS[current.month-1]} {current.year}"
     frame = snapshot.movements

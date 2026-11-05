@@ -9,6 +9,7 @@ import pandas as pd
 from .errors import ConflictError, ValidationError
 from .storage import SCHEMA, ExcelStore
 from .utils import as_date, cents, money, new_id, text, timestamp
+from .budget import BudgetServiceMixin, normalize_budget, validate_budget_relations
 
 
 KINDS = ("Entrata", "Uscita", "Giroconto")
@@ -51,7 +52,7 @@ class Snapshot:
         return [row["Nome"] for row in self.accounts]
 
 
-class FinanceService:
+class FinanceService(BudgetServiceMixin):
     def __init__(self, path, *, store=None):
         self.store = store if store is not None else ExcelStore(path)
 
@@ -102,6 +103,8 @@ class FinanceService:
                         row["Tipo"] = text(row.get("Tipo"))
                         if row["Tipo"] not in CATEGORY_KINDS:
                             raise ValidationError("Il tipo deve essere Entrata, Uscita o Entrambe.")
+                    elif sheet in ("Budget", "Impegni"):
+                        normalize_budget(sheet, row)
                     elif sheet == "Movimenti":
                         row["Data"] = as_date(row.get("Data"), past_only=True)
                         row["Tipo"] = text(row.get("Tipo"))
@@ -156,6 +159,7 @@ class FinanceService:
                 raise ValidationError(f"Nel foglio {sheet} ci sono nomi duplicati.")
 
     def _validate_relations(self, tables):
+        validate_budget_relations(tables)
         movements = {row["ID"]: row for row in tables["Movimenti"]}
         matches = {row["ID"]: row for row in tables["Arbitraggio"]}
         linked_ids = set()

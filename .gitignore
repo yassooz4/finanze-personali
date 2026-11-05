@@ -6,3 +6,4 @@ __pycache__/
 *.lock
 *.backup.xlsx
 .finanze-*.xlsx
+.test-tmp*/

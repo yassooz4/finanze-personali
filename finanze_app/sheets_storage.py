@@ -16,7 +16,7 @@ from .errors import ConflictError, StorageError
 from .storage import SCHEMA, DEFAULT_CATEGORIES
 from .utils import new_id
 
-DATE_COLUMNS = {"Data", "Data partita", "Data incasso"}
+DATE_COLUMNS = {"Data", "Data partita", "Data incasso", "Inizio", "Fine", "Scadenza"}
 EPOCH = datetime(1899, 12, 30)
 SCOPES = ["https://www.googleapis.com/auth/spreadsheets"]
 _LOCKS = {}
