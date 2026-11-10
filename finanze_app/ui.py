@@ -354,10 +354,13 @@ def movement_form(service, *, token, movement=None):
                     "Rimborso della spesa", options, index=_index(options, original.get("Spesa_rimborsata_ID")),
                     format_func=refund_label, key=f"{token}_refund_expense",
                 )
-        if is_transfer:
+        if is_transfer and original.get("Tipo") == "Giroconto" and original.get("Spesa_rimborsata_ID"):
+            refund_expense_id = original["Spesa_rimborsata_ID"]
+            st.caption(f"Giroconto per la spesa: {refund_label(refund_expense_id)}")
+        elif is_transfer:
             options = [""] + [
                 row["ID"] for row in records.values()
-                if row["Spesa_rimborsata_ID"] and row["Conto"] != records[row["Spesa_rimborsata_ID"]]["Conto"]
+                if row["Tipo"] == "Entrata" and row["Spesa_rimborsata_ID"] and row["Conto"] != records[row["Spesa_rimborsata_ID"]]["Conto"]
             ]
             if len(options) > 1:
                 refund_receipt_id = st.selectbox(
