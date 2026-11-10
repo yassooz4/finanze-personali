@@ -51,7 +51,7 @@ def render(service, snapshot):
             st.caption(month_name)
             expenses_tab, income_tab = st.tabs(["Uscite", "Entrate"])
             with expenses_tab:
-                ui.donut_chart(stats.grouped_amounts(month, kind="Uscita", field="Categoria"), "Categoria", "home_categories", "Nessuna spesa registrata questo mese.")
+                ui.donut_chart(stats.grouped_amounts(month, kind="Uscita", field="Categoria", snapshot=snapshot), "Categoria", "home_categories", "Nessuna spesa registrata questo mese.")
             with income_tab:
                 ui.donut_chart(stats.grouped_amounts(month, kind="Entrata", field="Fonte"), "Fonte", "home_sources", "Nessuna entrata registrata questo mese.")
     left, right = st.columns([1.3, 1], gap="medium")

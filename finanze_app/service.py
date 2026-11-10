@@ -9,6 +9,7 @@ import pandas as pd
 from .errors import ConflictError, ValidationError
 from .storage import SCHEMA, ExcelStore
 from .utils import as_date, cents, money, new_id, text, timestamp
+from .reimbursements import validate_reimbursements
 from .budget import BudgetServiceMixin, normalize_budget, validate_budget_relations
 
 
@@ -114,6 +115,9 @@ class FinanceService(BudgetServiceMixin):
                         row["Importo"] = money(row.get("Importo"), positive=not bool(row["Arbitraggio_ID"]), nonnegative=True)
                         for field in ("Categoria", "Fonte", "Note", "Conto", "Conto_destinazione", "Descrizione"):
                             row[field] = text(row.get(field), label=field, limit=5000 if field == "Note" else 2000)
+                        row["Rimborso_atteso"] = money(row.get("Rimborso_atteso") or 0, nonnegative=True)
+                        for field in ("Spesa_rimborsata_ID", "Incasso_rimborso_ID"):
+                            row[field] = text(row.get(field), limit=80)
                         if not row["Descrizione"]:
                             raise ValidationError("La descrizione è obbligatoria.")
                         created = row.get("Data_creazione")
@@ -161,6 +165,7 @@ class FinanceService(BudgetServiceMixin):
     def _validate_relations(self, tables):
         validate_budget_relations(tables)
         movements = {row["ID"]: row for row in tables["Movimenti"]}
+        validate_reimbursements(movements)
         matches = {row["ID"]: row for row in tables["Arbitraggio"]}
         linked_ids = set()
         for movement in movements.values():
@@ -219,7 +224,8 @@ class FinanceService(BudgetServiceMixin):
             return result
         return self.store.transaction(transaction)
 
-    def save_movement(self, *, kind, amount, date, description, category, source, account, notes="", movement_id=None, expected=None, destination_account=""):
+    def save_movement(self, *, kind, amount, date, description, category, source, account, notes="", movement_id=None, expected=None, destination_account="",
+                      reimbursable=None, expected_refund=None, refund_expense_id=None, refund_receipt_id=None):
         def operation(tables):
             if kind not in KINDS:
                 raise ValidationError("Seleziona Entrata, Uscita o Giroconto.")
@@ -246,6 +252,15 @@ class FinanceService(BudgetServiceMixin):
                 "Fonte": "Giroconto" if is_transfer else text(source), "Conto": account,
                 "Conto_destinazione": destination, "Note": text(notes, limit=5000),
             }
+            if reimbursable is not None:
+                values["Rimborso_atteso"] = (
+                    money(expected_refund if expected_refund is not None else amount, positive=True)
+                    if reimbursable else 0
+                )
+            if refund_expense_id is not None:
+                values["Spesa_rimborsata_ID"] = refund_expense_id
+            if refund_receipt_id is not None:
+                values["Incasso_rimborso_ID"] = refund_receipt_id
             if row is None:
                 row = {"ID": new_id("M"), "Data_creazione": timestamp(), "Arbitraggio_ID": "", **values}
                 tables["Movimenti"].append(row)

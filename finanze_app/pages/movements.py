@@ -4,7 +4,8 @@ from .. import analytics as stats
 from .. import ui
 from ..export import movements_csv, movements_xlsx
 from ..service import KINDS
-from ..utils import euro
+from ..reimbursements import reimbursement_amounts
+from ..utils import cents, euro
 
 
 def render(service, snapshot):
@@ -19,6 +20,9 @@ def render(service, snapshot):
         account = col3.selectbox("Conto", [None] + snapshot.account_names(), format_func=lambda value: value if value is not None else "Tutti", key="movement_account_filter")
         category_options = [None, ""] + sorted([row["Nome"] for row in snapshot.categories], key=str.casefold)
         category = col4.selectbox("Categoria", category_options, format_func=lambda value: "Tutte" if value is None else (value or "Senza categoria"), key="movement_category_filter")
+        reimbursable_only = st.checkbox("Rimborsabili", key="movement_reimbursable_filter")
+    if reimbursable_only:
+        filtered = filtered[filtered["Rimborso_atteso"] > 0]
     filtered = stats.movement_view(filtered, account)
     if kind == "Giroconto":
         filtered = filtered[filtered["_Giroconto"]]
@@ -39,6 +43,35 @@ def render(service, snapshot):
         ("Differenza", euro(net, signed=True), f"{len(filtered)} movimenti", "≈", "negative" if net < 0 else ""),
     ])
     st.caption("Il saldo attuale comprende il saldo iniziale e tutti i movimenti, indipendentemente dai filtri. Entrate, uscite e differenza si riferiscono ai risultati filtrati.")
+    refunds = filtered[filtered["Rimborso_atteso"] > 0]
+    if not refunds.empty:
+        received, pending = reimbursement_amounts(snapshot.tables["Movimenti"])
+        rows = []
+        for row in refunds.to_dict("records"):
+            expense_id = row["ID"]
+            outstanding = cents(row["Rimborso_atteso"]) - received[expense_id]
+            to_transfer = pending[expense_id]
+            states = []
+            if outstanding:
+                states.append("Da ricevere")
+            if to_transfer:
+                states.append("Da trasferire")
+            rows.append({
+                "Data": row["Data"].strftime("%d/%m/%Y"),
+                "Spesa": row["Descrizione"],
+                "Conto di partenza": row["Conto"],
+                "Stato": " · ".join(states) or "Completato",
+                "Da ricevere": outstanding,
+                "Da trasferire": to_transfer,
+            })
+        with st.container(border=True, key="panel_refunds"):
+            st.subheader("Rimborsi")
+            for column, label in zip(st.columns(2), ("Da ricevere", "Da trasferire")):
+                column.metric(label, euro(sum(row[label] for row in rows) / 100))
+                for row in rows:
+                    row[label] = euro(row[label] / 100)
+            st.caption("Collega l'entrata alla spesa dal modulo del movimento. Se serve un giroconto, collegalo all'incasso dal modulo del giroconto.")
+            st.dataframe(rows, hide_index=True, width="stretch")
     with st.container(border=True, key="panel_movements_2"):
         st.subheader("Storico dei movimenti")
         if filtered.empty:

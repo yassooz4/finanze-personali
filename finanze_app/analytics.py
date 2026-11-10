@@ -5,6 +5,7 @@ from datetime import date
 
 import pandas as pd
 
+from .reimbursements import reimbursement_amounts
 from .service import Snapshot
 from .utils import cents, today
 
@@ -82,13 +83,16 @@ def monthly_flows(frame, start=None, end=None):
     return pivot.reset_index()
 
 
-def grouped_amounts(frame, *, kind, field):
+def grouped_amounts(frame, *, kind, field, snapshot=None):
     work = frame[frame["Tipo"] == kind].copy()
     if work.empty:
         return pd.DataFrame(columns=[field, "Importo"])
     fallback = "Senza categoria" if field == "Categoria" else "Non specificata"
     work[field] = work[field].replace("", fallback).fillna(fallback)
     work["Centesimi"] = work["Importo"].map(cents)
+    if snapshot is not None and kind == "Uscita" and field == "Categoria":
+        received, _ = reimbursement_amounts(snapshot.tables["Movimenti"])
+        work["Centesimi"] -= work["ID"].map(lambda value: received.get(value, 0))
     result = work.groupby(field, as_index=False)["Centesimi"].sum().rename(columns={"Centesimi": "Importo"})
     result["Importo"] = result["Importo"] / 100
     return result[result["Importo"] > 0].sort_values("Importo", ascending=False)

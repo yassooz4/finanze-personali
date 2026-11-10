@@ -32,8 +32,9 @@ def render(service, snapshot):
     left, right = st.columns(2)
     with left:
         with st.container(border=True, key="panel_statistics_3"):
-            st.subheader("Spese per categoria")
-            ui.donut_chart(stats.grouped_amounts(filtered, kind="Uscita", field="Categoria"), "Categoria", "stats_categories", "Nessuna uscita nel periodo selezionato.")
+            st.subheader("Spese nette per categoria")
+            st.caption("Gli incassi collegati riducono la spesa nel periodo e sul conto dell'anticipo.")
+            ui.donut_chart(stats.grouped_amounts(filtered, kind="Uscita", field="Categoria", snapshot=snapshot), "Categoria", "stats_categories", "Nessuna uscita nel periodo selezionato.")
     with right:
         with st.container(border=True, key="panel_statistics_4"):
             st.subheader("Provenienza delle entrate")
