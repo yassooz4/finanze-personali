@@ -2,10 +2,86 @@ import streamlit as st
 
 from .. import analytics as stats
 from .. import ui
+from ..errors import FinanceError
 from ..export import movements_csv, movements_xlsx
 from ..service import KINDS
-from ..reimbursements import reimbursement_amounts
-from ..utils import cents, euro
+from ..reimbursements import reimbursement_amounts, remaining_transfers
+from ..utils import cents, euro, today
+
+
+
+def refund_actions(service, snapshot, outstanding):
+    movements = snapshot.tables["Movimenti"]
+    records = {row["ID"]: row for row in movements}
+    remaining = remaining_transfers(movements)
+    receipts = {}
+    for receipt_id, amount in remaining.items():
+        if amount:
+            expense_id = records[receipt_id]["Spesa_rimborsata_ID"]
+            receipts.setdefault(expense_id, []).append(receipt_id)
+    options = [expense_id for expense_id in outstanding if outstanding[expense_id] or receipts.get(expense_id)]
+    if not options:
+        return
+
+    def label(value):
+        row = records[value]
+        return f"{row['Data']:%d/%m/%Y} · {row['Descrizione']} · {row['Conto']}"
+
+    with st.expander("Registra rimborso"):
+        expense_id = st.selectbox("Spesa da rimborsare", options, format_func=label, key="refund_expense")
+        expense = records[expense_id]
+        destination = expense["Conto"]
+        other_accounts = [account for account in snapshot.account_names() if account != destination]
+        actions = []
+        if outstanding[expense_id]:
+            if other_accounts:
+                actions.append("Giroconto con soldi già sul conto")
+            actions.append("Registra un incasso esterno")
+        if receipts.get(expense_id):
+            actions.append("Giroconto di un rimborso già registrato")
+        action = st.radio("Cosa vuoi registrare?", actions, key=f"refund_action_{expense_id}")
+        incoming = action == "Registra un incasso esterno"
+        receipt_id = ""
+        account = None
+        earliest = expense["Data"]
+        maximum = outstanding[expense_id]
+        if action == "Giroconto di un rimborso già registrato":
+            receipt_id = st.selectbox(
+                "Incasso da trasferire", receipts[expense_id],
+                format_func=lambda value: f"{label(value)} · {euro(remaining[value] / 100)} da trasferire",
+                key=f"refund_receipt_{expense_id}",
+            )
+            receipt = records[receipt_id]
+            account = receipt["Conto"]
+            earliest = receipt["Data"]
+            maximum = remaining[receipt_id]
+        elif incoming:
+            account = st.selectbox("Conto su cui è arrivato l’incasso", snapshot.account_names(),
+                                   key=f"refund_arrival_{expense_id}")
+            st.caption("Usa questa opzione per un incasso che devi ancora registrare nei Movimenti.")
+        else:
+            account = st.selectbox("Conto da cui prelevare", other_accounts, key=f"refund_source_{expense_id}")
+
+        if not incoming:
+            st.caption(f"Giroconto da {account} a {destination}. Registralo dopo aver spostato i soldi.")
+        with st.form(f"refund_form_{expense_id}_{action}_{receipt_id}_{maximum}"):
+            left, right = st.columns(2)
+            amount = left.number_input("Importo del rimborso (€)", min_value=.01, max_value=maximum / 100,
+                                       value=maximum / 100, step=.01, format="%.2f")
+            date = right.date_input("Data del movimento", value=today(), min_value=earliest,
+                                    max_value=today(), format="DD/MM/YYYY")
+            if st.form_submit_button("Salva incasso" if incoming else "Salva giroconto", type="primary"):
+                try:
+                    service.save_movement(
+                        kind="Entrata" if incoming else "Giroconto", amount=amount, date=date,
+                        description=f"Rimborso · {expense['Descrizione'][:1989]}", category="", source="Rimborso",
+                        account=account, destination_account="" if incoming else destination,
+                        refund_expense_id="" if receipt_id else expense_id, refund_receipt_id=receipt_id,
+                    )
+                except FinanceError as exc:
+                    st.error(str(exc))
+                else:
+                    ui.flash("Incasso registrato." if incoming else "Giroconto registrato. Saldi aggiornati.")
 
 
 def render(service, snapshot):
@@ -45,11 +121,13 @@ def render(service, snapshot):
     st.caption("Il saldo attuale comprende il saldo iniziale e tutti i movimenti, indipendentemente dai filtri. Entrate, uscite e differenza si riferiscono ai risultati filtrati.")
     refunds = filtered[filtered["Rimborso_atteso"] > 0]
     if not refunds.empty:
-        received, pending = reimbursement_amounts(snapshot.tables["Movimenti"])
+        received, pending = reimbursement_amounts(snapshot.tables["Movimenti"], include_internal=True)
+        outstanding_by_id = {}
         rows = []
         for row in refunds.to_dict("records"):
             expense_id = row["ID"]
             outstanding = cents(row["Rimborso_atteso"]) - received[expense_id]
+            outstanding_by_id[expense_id] = outstanding
             to_transfer = pending[expense_id]
             states = []
             if outstanding:
@@ -70,8 +148,8 @@ def render(service, snapshot):
                 column.metric(label, euro(sum(row[label] for row in rows) / 100))
                 for row in rows:
                     row[label] = euro(row[label] / 100)
-            st.caption("Collega l'entrata alla spesa dal modulo del movimento. Se serve un giroconto, collegalo all'incasso dal modulo del giroconto.")
             st.dataframe(rows, hide_index=True, width="stretch")
+            refund_actions(service, snapshot, outstanding_by_id)
     with st.container(border=True, key="panel_movements_2"):
         st.subheader("Storico dei movimenti")
         if filtered.empty:
