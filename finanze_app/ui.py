@@ -308,6 +308,20 @@ def movement_form(service, *, token, movement=None):
         st.info("Per un giroconto servono almeno due conti. Aggiungi un altro conto in Gestione → Conti.")
         return
     categories = [""] + snapshot.category_names(kind) if not is_transfer else []
+    reimbursable = kind == "Uscita" and st.checkbox(
+        "Spesa rimborsabile", value=bool(original.get("Rimborso_atteso")), key=f"{token}_reimbursable",
+    )
+    records = {row["ID"]: row for row in snapshot.tables["Movimenti"]}
+
+    def refund_label(value):
+        if not value:
+            return "Nessun collegamento"
+        row = records[value]
+        route = row["Conto"]
+        if expense_id := row["Spesa_rimborsata_ID"]:
+            route += f" → {records[expense_id]['Conto']}"
+        return f"{row['Data']:%d/%m/%Y} · {row['Descrizione']} · {route} · {euro(row['Importo'])}"
+
     with st.form(f"{token}_form"):
         col1, col2 = st.columns(2)
         amount = col1.number_input("Importo (€)", min_value=0.0, max_value=999999999999.99, value=float(original.get("Importo", 0.0)), step=.01, format="%.2f", key=f"{token}_amount")
@@ -324,12 +338,41 @@ def movement_form(service, *, token, movement=None):
             category = col1.selectbox("Categoria", categories, index=_index(categories, original.get("Categoria", "")), format_func=lambda value: value or "Senza categoria", key=f"{token}_category")
             account = col2.selectbox("Conto", accounts, index=_index(accounts, original.get("Conto")), key=f"{token}_account")
             source = st.text_input("Provenienza / destinazione", value=original.get("Fonte", ""), max_chars=2000, placeholder="Es. datore di lavoro, negozio, persona", key=f"{token}_source")
+        expected_refund = None
+        refund_expense_id = refund_receipt_id = ""
+        if reimbursable:
+            expected_refund = st.number_input(
+                "Rimborso atteso (€)", min_value=.01, max_value=999999999999.99,
+                value=original.get("Rimborso_atteso") or None, step=.01, format="%.2f",
+                placeholder="Intero importo della spesa", key=f"{token}_expected_refund",
+                help="Lascia vuoto per attendere l'intero importo della spesa.",
+            )
+        if kind == "Entrata":
+            options = [""] + [row["ID"] for row in records.values() if row["Rimborso_atteso"]]
+            if len(options) > 1:
+                refund_expense_id = st.selectbox(
+                    "Rimborso della spesa", options, index=_index(options, original.get("Spesa_rimborsata_ID")),
+                    format_func=refund_label, key=f"{token}_refund_expense",
+                )
+        if is_transfer:
+            options = [""] + [
+                row["ID"] for row in records.values()
+                if row["Spesa_rimborsata_ID"] and row["Conto"] != records[row["Spesa_rimborsata_ID"]]["Conto"]
+            ]
+            if len(options) > 1:
+                refund_receipt_id = st.selectbox(
+                    "Riporta sul conto originale il rimborso", options,
+                    index=_index(options, original.get("Incasso_rimborso_ID")),
+                    format_func=refund_label, key=f"{token}_refund_receipt",
+                )
         notes = st.text_area("Note (facoltative)", value=original.get("Note", ""), max_chars=5000, height=80, key=f"{token}_notes")
         st.caption("Il giroconto sposta soldi tra i tuoi conti: il totale generale e le statistiche di entrate e uscite rimangono invariati." if is_transfer else "Le categorie si personalizzano in Gestione. Per registrare una partita usa Arbitraggio.")
         submitted = st.form_submit_button("Salva modifiche" if movement else ("Salva giroconto" if is_transfer else "Salva movimento"), type="primary", width="stretch")
         if submitted:
             try:
-                service.save_movement(kind=kind, amount=amount, date=date_value, description=description, category=category, source=source, account=account, notes=notes, movement_id=original.get("ID"), expected=movement, destination_account=destination_account)
+                service.save_movement(kind=kind, amount=amount, date=date_value, description=description, category=category, source=source, account=account, notes=notes, movement_id=original.get("ID"), expected=movement, destination_account=destination_account,
+                                      reimbursable=reimbursable, expected_refund=expected_refund,
+                                      refund_expense_id=refund_expense_id, refund_receipt_id=refund_receipt_id)
             except FinanceError as exc:
                 st.error(str(exc))
             else:
