@@ -25,6 +25,7 @@ SCHEMA = {
     "Movimenti": [
         "ID", "Data", "Tipo", "Importo", "Categoria", "Descrizione", "Fonte",
         "Note", "Data_creazione", "Conto", "Arbitraggio_ID", "Conto_destinazione",
+        "Rimborso_atteso", "Spesa_rimborsata_ID", "Incasso_rimborso_ID",
     ],
     "Arbitraggio": [
         "ID", "Data partita", "Numero pacco", "Squadra casa", "Squadra ospite",
